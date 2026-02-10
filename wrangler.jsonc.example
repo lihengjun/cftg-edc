@@ -1,0 +1,15 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "cftg-edc",
+	"main": "src/index.js",
+	"compatibility_date": "2026-02-05",
+	"observability": {
+		"enabled": true
+	},
+	"compatibility_flags": [
+		"nodejs_compat"
+	],
+	"kv_namespaces": [
+		{ "binding": "MAIL_CONFIG", "id": "<your-kv-namespace-id>" }
+	]
+}
