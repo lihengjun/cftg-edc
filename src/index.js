@@ -1,9 +1,11 @@
 import { deriveWebhookSecret } from './shared/utils.js';
 import { sendTelegramMessage, answerCallbackQuery } from './shared/telegram.js';
+import { loadSystemConfig } from './shared/storage.js';
 import { cmdList, cmdSearch, handleEmailCallback, handleEmailReply, handleIncomingEmail } from './email/email.js';
 import { cmdPwdList, cmdPwdSave, handlePwdCallback, handlePwdReply } from './password/password.js';
+import { cmdConfig, handleConfigCallback, handleConfigReply } from './config/config.js';
 
-// ============ 密码回调 action 前缀集合 ============
+// ============ 回调 action 前缀集合 ============
 
 const PWD_ACTIONS = new Set([
   'pa', 'pv', 'ps', 'ph', 'pe', 'peu', 'pep', 'pen', 'prn', 'pet',
@@ -11,12 +13,15 @@ const PWD_ACTIONS = new Set([
   'ptl', 'ptv', 'ptr', 'ptd', 'ptcd', 'ptp', 'ptca', 'ptcca',
 ]);
 
+const CONFIG_ACTIONS = new Set(['cfg', 'cfg_e', 'cfg_rst', 'cfg_rsta']);
+
 // ============ Webhook 路由 ============
 
 export async function handleTelegramWebhook(request, env, ctx) {
   let update;
   try { update = await request.json(); }
   catch { return new Response('Bad request', { status: 400 }); }
+  await loadSystemConfig(env);
 
   // 处理 Inline Keyboard 按钮回调
   const cbq = update.callback_query;
@@ -26,6 +31,8 @@ export async function handleTelegramWebhook(request, env, ctx) {
       const [action] = cbq.data.split(':');
       if (PWD_ACTIONS.has(action)) {
         await handlePwdCallback(cbq, env, ctx);
+      } else if (CONFIG_ACTIONS.has(action)) {
+        await handleConfigCallback(cbq, env);
       } else {
         await handleEmailCallback(cbq, env, ctx);
       }
@@ -51,7 +58,9 @@ export async function handleTelegramWebhook(request, env, ctx) {
   // 处理用户回复 ForceReply 提示的输入（命令优先）
   const replyTo = msg.reply_to_message;
   if (replyTo && replyTo.text && !text.startsWith('/')) {
-    if (replyTo.text.startsWith('🔐')) {
+    if (replyTo.text.startsWith('⚙️')) {
+      await handleConfigReply(msg, replyTo, text, env);
+    } else if (replyTo.text.startsWith('🔐')) {
       await handlePwdReply(msg, replyTo, text, env);
     } else {
       await handleEmailReply(msg, replyTo, text, env);
@@ -76,6 +85,7 @@ export async function handleTelegramWebhook(request, env, ctx) {
         await cmdSearch(keyword, env);
         break;
       }
+      case '/config': await cmdConfig(env); break;
       default: return new Response('OK');
     }
   } catch (err) {
@@ -118,6 +128,7 @@ export default {
         { command: 'list', description: '管理邮箱前缀' },
         { command: 'search', description: '搜索邮件（发件人/主题）' },
         { command: 'pwd', description: '密码管理' },
+        { command: 'config', description: '系统设置' },
       ];
       const cmdRes = await fetch(`https://api.telegram.org/bot${env.TG_BOT_TOKEN}/setMyCommands`, {
         method: 'POST',
@@ -134,6 +145,7 @@ export default {
   },
 
   async email(message, env, ctx) {
+    await loadSystemConfig(env);
     await handleIncomingEmail(message, env);
   },
 };
@@ -146,4 +158,5 @@ export * from './shared/crypto.js';
 export * from './email/encoding.js';
 export * from './shared/storage.js';
 export * from './email/email.js';
+export * from './config/config.js';
 export * from './password/password.js';

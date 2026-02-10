@@ -18,7 +18,8 @@ import {
   saveSearchQuery, getSearchQuery,
   saveMgmtSearch, getMgmtSearch,
   runEmailCleanup, trimOldEntries,
-  MAX_STORAGE, STAR_MAX_STORAGE, getImageTtl,
+  getMaxStorage, getStarMaxStorage, getImageTtl,
+  getAttachMaxSize, getBodyMaxLength, getTrackingPixelSize,
 } from '../shared/storage.js';
 
 // ============ 常量 ============
@@ -66,7 +67,8 @@ function extFromMime(mimeType) {
 
 // ============ 附件分类 ============
 
-export function classifyAttachment(att, maxSize) {
+export function classifyAttachment(att, maxSize, trackingSize) {
+  trackingSize = trackingSize ?? TRACKING_PIXEL_MAX_SIZE;
   const size = getAttachmentSize(att);
   const mime = (att.mimeType || '').toLowerCase();
   const isImage = IMAGE_TYPES.has(mime);
@@ -74,7 +76,7 @@ export function classifyAttachment(att, maxSize) {
   const isInline = att.disposition === 'inline' || att.related;
 
   if (!att.content) return { action: 'skip', size, mime };
-  if (isImage && isInline && size < TRACKING_PIXEL_MAX_SIZE) {
+  if (isImage && isInline && size < trackingSize) {
     return { action: 'ignore', size, mime };
   }
   if (size > maxSize) return { action: 'listOnly', size, mime };
@@ -83,11 +85,11 @@ export function classifyAttachment(att, maxSize) {
   return { action: 'sendDocument', size, mime };
 }
 
-export function buildAttachmentSummary(attachments, maxSize) {
+export function buildAttachmentSummary(attachments, maxSize, trackingSize) {
   if (!attachments || attachments.length === 0) return '';
   let photos = 0, docs = 0, oversized = 0;
   for (const att of attachments) {
-    const cls = classifyAttachment(att, maxSize);
+    const cls = classifyAttachment(att, maxSize, trackingSize);
     if (cls.action === 'sendPhoto') photos++;
     else if (cls.action === 'sendDocument') docs++;
     else if (cls.action === 'listOnly') oversized++;
@@ -101,7 +103,7 @@ export function buildAttachmentSummary(attachments, maxSize) {
 
 // ============ 消息格式化 ============
 
-export function buildNotificationText(parsed, rawFrom, rawTo, bodyText, attachmentSummary) {
+export function buildNotificationText(parsed, rawFrom, rawTo, bodyText, attachmentSummary, bodyMaxLen) {
   let header = `📧 <b>新邮件</b>\n\n`;
   header += `<b>发件人：</b>${escAddr(formatAddress(parsed.from) || rawFrom)}\n`;
   header += `<b>收件人：</b>${escAddr(formatAddressList(parsed.to) || rawTo)}\n`;
@@ -136,8 +138,9 @@ export function buildNotificationText(parsed, rawFrom, rawTo, bodyText, attachme
   let body = bodyText || '(无正文)';
 
   // 先按可读性截断
-  if (body.length > BODY_MAX_LENGTH) {
-    body = body.substring(0, BODY_MAX_LENGTH) + truncSuffix;
+  bodyMaxLen = bodyMaxLen || BODY_MAX_LENGTH;
+  if (body.length > bodyMaxLen) {
+    body = body.substring(0, bodyMaxLen) + truncSuffix;
   }
 
   // 再检查 Telegram 限制（基于 esc 后的长度）
@@ -160,6 +163,28 @@ export function buildNotificationText(parsed, rawFrom, rawTo, bodyText, attachme
   }
 
   return header + escaped;
+}
+
+// 通用正文截断辅助：确保 header + escaped body 不超过 TG 限制
+function truncateBodyForTg(headerLen, body, maxLen) {
+  const truncSuffix = '\n...(已截断)';
+  if (body.length > maxLen) body = body.substring(0, maxLen) + truncSuffix;
+  let escaped = esc(body);
+  if (headerLen + escaped.length > TG_MESSAGE_LIMIT) {
+    let len = Math.min(body.length, TG_MESSAGE_LIMIT - headerLen - esc(truncSuffix).length - 20);
+    while (len > 100) {
+      const candidate = body.substring(0, len) + truncSuffix;
+      if (headerLen + esc(candidate).length <= TG_MESSAGE_LIMIT) {
+        escaped = esc(candidate);
+        break;
+      }
+      len -= 50;
+    }
+    if (headerLen + escaped.length > TG_MESSAGE_LIMIT) {
+      escaped = esc(body.substring(0, 100) + truncSuffix);
+    }
+  }
+  return escaped;
 }
 
 export function buildCompactNotificationText(parsed, rawFrom, rawTo) {
@@ -492,8 +517,9 @@ export function buildMgmtKeyboard(senders, page, confirmState, searchKeyword) {
 
 // ============ 收藏 ============
 
-export function buildStarredListText(starredEntries, metaMap) {
+export function buildStarredListText(starredEntries, metaMap, starMaxStorage) {
   if (starredEntries.length === 0) return '⭐ 没有收藏的邮件。';
+  const maxStar = starMaxStorage || 50 * 1024 * 1024;
   let text = '⭐ 收藏邮件：\n\n';
   let totalStarredSize = 0;
   for (let n = 0; n < starredEntries.length; n++) {
@@ -511,7 +537,7 @@ export function buildStarredListText(starredEntries, metaMap) {
     if (imgCount > 0) text += ` · ${imgCount} 张图片`;
     text += ` · ${formatSize(entrySize)}\n\n`;
   }
-  text += `\n💾 收藏占用: ${formatSize(totalStarredSize)} / ${formatSize(STAR_MAX_STORAGE)}`;
+  text += `\n💾 收藏占用: ${formatSize(totalStarredSize)} / ${formatSize(maxStar)}`;
   return text.trim();
 }
 
@@ -543,7 +569,7 @@ export async function sendTelegramInlineList(env) {
     getGlobalMute(env), getMutedPrefixes(env), runEmailCleanup(env),
   ]);
   active.sort(); paused.sort();
-  const storageInfo = { used: idx.totalSize, total: MAX_STORAGE };
+  const storageInfo = { used: idx.totalSize, total: getMaxStorage(env) };
   const starredCount = idx.entries.filter(e => e.starred).length;
   const payload = {
     chat_id: env.TG_CHAT_ID,
@@ -563,7 +589,7 @@ export async function editToList(env, msgId) {
     getGlobalMute(env), getMutedPrefixes(env), runEmailCleanup(env),
   ]);
   active.sort(); paused.sort();
-  const storageInfo = { used: idx.totalSize, total: MAX_STORAGE };
+  const storageInfo = { used: idx.totalSize, total: getMaxStorage(env) };
   const starredCount = idx.entries.filter(e => e.starred).length;
   const payload = {
     chat_id: env.TG_CHAT_ID,
@@ -607,7 +633,7 @@ export async function editToStarredList(env, msgId, confirmDelId) {
     starredEntries.map(e => getMsgMeta(env, e.id))
   );
   starredEntries.forEach((e, i) => { metaMap[e.id] = metaResults[i]; });
-  let text = buildStarredListText(starredEntries, metaMap);
+  let text = buildStarredListText(starredEntries, metaMap, getStarMaxStorage(env));
   if (confirmDelId) text += '\n\n⚠️ 确认要删除此邮件的所有存储数据吗？';
   const payload = {
     chat_id: env.TG_CHAT_ID,
@@ -652,7 +678,7 @@ export async function editToMgmt(env, msgId, page, confirmState, searchKeyword) 
     const kw = searchKeyword.toLowerCase();
     senders = senders.filter(s => s.addr.toLowerCase().includes(kw));
   }
-  const storageInfo = { used: idx.totalSize, total: MAX_STORAGE };
+  const storageInfo = { used: idx.totalSize, total: getMaxStorage(env) };
   const text = buildMgmtText(senders, page, storageInfo, confirmState, searchKeyword);
   const keyboard = buildMgmtKeyboard(senders, page, confirmState, searchKeyword);
   return editMessageText(env, msgId, text, keyboard);
@@ -797,6 +823,7 @@ export async function handleEmailCallback(cbq, env, ctx) {
     await setGlobalMute(env, false);
     toast = '🔔 已关闭全局静音';
     await editToList(env, msgId);
+
   } else if (action === 'back') {
     await editToList(env, msgId);
 
@@ -968,8 +995,9 @@ export async function handleEmailCallback(cbq, env, ctx) {
       }
       const entrySize = (entry.textSize || 0) +
         (entry.images || []).reduce((s, img) => s + img.size, 0);
-      if (starredSize + entrySize > STAR_MAX_STORAGE) {
-        toast = `⚠️ 收藏空间不足（${formatSize(starredSize)}/${formatSize(STAR_MAX_STORAGE)}）`;
+      const starMax = getStarMaxStorage(env);
+      if (starredSize + entrySize > starMax) {
+        toast = `⚠️ 收藏空间不足（${formatSize(starredSize)}/${formatSize(starMax)}）`;
       } else {
         entry.starred = true;
         await setEmailIndex(env, idx);
@@ -1013,8 +1041,9 @@ export async function handleEmailCallback(cbq, env, ctx) {
           let body = parsed.text || '';
           if (!body && parsed.html) body = htmlToText(parsed.html);
           if (body) {
-            if (body.length > BODY_MAX_LENGTH) body = body.substring(0, BODY_MAX_LENGTH) + '\n...(已截断)';
-            text += `\n━━━━━━━━━━━━━━━━━━━━\n\n${esc(body)}`;
+            const bml = getBodyMaxLength(env);
+            const sep = '\n━━━━━━━━━━━━━━━━━━━━\n\n';
+            text += sep + truncateBodyForTg(text.length + sep.length, body, bml);
           }
         } catch { /* 解析失败 */ }
       }
@@ -1041,11 +1070,11 @@ export async function handleEmailCallback(cbq, env, ctx) {
       const delPromises = [];
       let freed = 0;
       for (const img of (entry.images || [])) {
-        delPromises.push(env.MAIL_CONFIG.delete(`img:${targetId}:${img.idx}`));
+        delPromises.push(env.KV.delete(`img:${targetId}:${img.idx}`));
         freed += img.size;
       }
       if (entry.textSize > 0) {
-        delPromises.push(env.MAIL_CONFIG.delete(`email_text:${targetId}`));
+        delPromises.push(env.KV.delete(`email_text:${targetId}`));
         freed += entry.textSize;
       }
       await Promise.all(delPromises);
@@ -1087,7 +1116,7 @@ export async function handleEmailCallback(cbq, env, ctx) {
       const delPromises = [];
       let freed = 0;
       for (const img of (entry.images || [])) {
-        delPromises.push(env.MAIL_CONFIG.delete(`img:${targetId}:${img.idx}`));
+        delPromises.push(env.KV.delete(`img:${targetId}:${img.idx}`));
         freed += img.size;
       }
       await Promise.all(delPromises);
@@ -1143,9 +1172,9 @@ export async function handleEmailCallback(cbq, env, ctx) {
     for (const entry of idx.entries) {
       if (entry.starred) continue;
       const delPromises = [];
-      if (entry.textSize > 0) delPromises.push(env.MAIL_CONFIG.delete(`email_text:${entry.id}`));
+      if (entry.textSize > 0) delPromises.push(env.KV.delete(`email_text:${entry.id}`));
       for (const img of (entry.images || [])) {
-        delPromises.push(env.MAIL_CONFIG.delete(`img:${entry.id}:${img.idx}`));
+        delPromises.push(env.KV.delete(`img:${entry.id}:${img.idx}`));
         freed += img.size;
       }
       freed += entry.textSize || 0;
@@ -1167,9 +1196,9 @@ export async function handleEmailCallback(cbq, env, ctx) {
       const entry = idx.entries[i];
       if (entry.starred) continue;
       const delPromises = [];
-      if (entry.textSize > 0) delPromises.push(env.MAIL_CONFIG.delete(`email_text:${entry.id}`));
+      if (entry.textSize > 0) delPromises.push(env.KV.delete(`email_text:${entry.id}`));
       for (const img of (entry.images || [])) {
-        delPromises.push(env.MAIL_CONFIG.delete(`img:${entry.id}:${img.idx}`));
+        delPromises.push(env.KV.delete(`img:${entry.id}:${img.idx}`));
         freed += img.size;
       }
       freed += entry.textSize || 0;
@@ -1220,8 +1249,9 @@ export async function handleEmailCallback(cbq, env, ctx) {
           let body = parsed.text || '';
           if (!body && parsed.html) body = htmlToText(parsed.html);
           if (body) {
-            if (body.length > BODY_MAX_LENGTH) body = body.substring(0, BODY_MAX_LENGTH) + '\n...(已截断)';
-            text += `\n━━━━━━━━━━━━━━━━━━━━\n\n${esc(body)}`;
+            const bml = getBodyMaxLength(env);
+            const sep = '\n━━━━━━━━━━━━━━━━━━━━\n\n';
+            text += sep + truncateBodyForTg(text.length + sep.length, body, bml);
           }
         } catch { /* 解析失败 */ }
       }
@@ -1269,7 +1299,7 @@ export async function handleEmailReply(msg, replyTo, text, env) {
       let senders = buildMergedSenderList(blockedList, mutedList);
       const kw = keyword.toLowerCase();
       senders = senders.filter(s => s.addr.toLowerCase().includes(kw));
-      const storageInfo = { used: idx.totalSize, total: MAX_STORAGE };
+      const storageInfo = { used: idx.totalSize, total: getMaxStorage(env) };
       await sendTelegramMessage(env,
         buildMgmtText(senders, 0, storageInfo, null, keyword), null, {
           reply_markup: buildMgmtKeyboard(senders, 0, null, keyword),
@@ -1341,8 +1371,10 @@ export async function handleIncomingEmail(message, env) {
     if (!body) body = '(无正文)';
 
     // 附件分类：图片附件存储，非图片仅在通知中列出
-    const maxSize = parseInt(env.ATTACHMENT_MAX_SIZE) || ATTACHMENT_MAX_SIZE;
-    const attachmentSummary = buildAttachmentSummary(parsed.attachments, maxSize);
+    const maxSize = getAttachMaxSize(env);
+    const trackingSize = getTrackingPixelSize(env);
+    const bodyMaxLen = getBodyMaxLength(env);
+    const attachmentSummary = buildAttachmentSummary(parsed.attachments, maxSize, trackingSize);
 
     // 列出非图片附件（仅通知，不存储）
     let nonImageInfo = '';
@@ -1355,7 +1387,7 @@ export async function handleIncomingEmail(message, env) {
         const isImage = IMAGE_TYPES.has(mime) || mime === GIF_TYPE;
         const isInline = att.disposition === 'inline' || att.related;
         if (!att.content) continue;
-        if (isImage && isInline && size < TRACKING_PIXEL_MAX_SIZE) continue; // 跟踪像素
+        if (isImage && isInline && size < trackingSize) continue; // 跟踪像素
         if (isImage) {
           imageAtts.push(att);
         } else {
@@ -1383,7 +1415,7 @@ export async function handleIncomingEmail(message, env) {
     if (isHighFreq) {
       text = buildCompactNotificationText(parsed, rawFrom, rawTo);
     } else {
-      text = buildNotificationText(parsed, rawFrom, rawTo, body, attachmentSummary);
+      text = buildNotificationText(parsed, rawFrom, rawTo, body, attachmentSummary, bodyMaxLen);
       const extras = (nonImageInfo ? esc(nonImageInfo) : '') + unsubInfo;
       if (text.length + extras.length <= TG_MESSAGE_LIMIT) {
         text += extras;
@@ -1407,6 +1439,7 @@ export async function handleIncomingEmail(message, env) {
       let totalImageSize = 0;
 
       const idx = await runEmailCleanup(env);
+      const maxStorage = getMaxStorage(env);
 
       for (let i = 0; i < imageAtts.length; i++) {
         const att = imageAtts[i];
@@ -1417,11 +1450,11 @@ export async function handleIncomingEmail(message, env) {
 
         // 检查空间，必要时驱逐
         const needed = emlSize + totalImageSize + imgSize;
-        if (idx.totalSize + needed > MAX_STORAGE) {
+        if (idx.totalSize + needed > maxStorage) {
           await evictForSpace(env, idx, needed);
         }
         // 仍然超出则跳过这张图片
-        if (idx.totalSize + needed > MAX_STORAGE) {
+        if (idx.totalSize + needed > maxStorage) {
           console.log(`Skipping image ${i}: storage full`);
           continue;
         }

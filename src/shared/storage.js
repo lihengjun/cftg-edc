@@ -1,12 +1,111 @@
 import { encryptData, decryptData } from './crypto.js';
 
-// ============ 存储管理常量 ============
+// ============ 存储管理常量（可通过环境变量覆盖） ============
 
+// 默认值（向后兼容，直接导出供测试使用）
 export const MAX_STORAGE = 300 * 1024 * 1024; // 300MB
 export const STAR_MAX_STORAGE = 50 * 1024 * 1024; // 50MB
 export const EML_TTL = 5184000; // 60 days in seconds
 export const RATE_WINDOW = 300000;  // 5 分钟滑动窗口（ms）
 export const RATE_THRESHOLD = 10;   // 窗口内超过此数切换精简模式
+export const MAX_EMAIL_ENTRIES = 5000;
+
+// ============ 配置项定义 ============
+
+export const CONFIG_ITEMS = [
+  { key: 'maxStorageMB',     label: '💾 邮件存储上限', unit: 'MB',  min: 10,  max: 1000,  defaultVal: 300,  envKey: 'MAX_STORAGE_MB' },
+  { key: 'starMaxStorageMB', label: '⭐ 收藏存储上限', unit: 'MB',  min: 5,   max: 1000,  defaultVal: 50,   envKey: 'STAR_MAX_STORAGE_MB' },
+  { key: 'emlTtlDays',       label: '📧 邮件保留天数', unit: '天',  min: 1,   max: 365,   defaultVal: 60,   envKey: 'EML_TTL_DAYS' },
+  { key: 'maxEmailEntries',  label: '📋 邮件最大条目', unit: '条',  min: 100, max: 50000, defaultVal: 5000,  envKey: 'MAX_EMAIL_ENTRIES' },
+  { key: 'rateThreshold',    label: '📈 高频阈值',     unit: '封',   min: 1,   max: 100,   defaultVal: 10,   envKey: 'RATE_THRESHOLD' },
+  { key: 'rateWindowMin',    label: '⏱️ 高频窗口',    unit: '分钟', min: 1,   max: 30,    defaultVal: 5,    envKey: 'RATE_WINDOW_MIN' },
+  { key: 'attachMaxSizeMB',  label: '📎 附件上限',    unit: 'MB',   min: 1,   max: 20,    defaultVal: 5,    envKey: 'ATTACH_MAX_SIZE_MB' },
+  { key: 'bodyMaxLength',    label: '📝 正文截断',    unit: '字符', min: 200, max: 3500,  defaultVal: 1500, envKey: 'BODY_MAX_LEN' },
+  { key: 'trackingPixelKB',  label: '🔍 追踪像素',    unit: 'KB',   min: 1,   max: 50,    defaultVal: 2,    envKey: 'TRACKING_PIXEL_KB' },
+  { key: 'maxPasswords',     label: '🔐 密码条数上限', unit: '条',   min: 0,   max: 10000, defaultVal: 0,    envKey: 'MAX_PASSWORDS' },
+];
+
+// ============ 系统配置 KV 读写 ============
+
+export async function getSystemConfig(env) {
+  if (!env.KV) return {};
+  try {
+    const val = await env.KV.get('sys_config');
+    return val ? JSON.parse(val) : {};
+  } catch { return {}; }
+}
+
+export async function setSystemConfig(env, config) {
+  await env.KV.put('sys_config', JSON.stringify(config));
+}
+
+// 从配置中读取某项的值：KV config > env > 默认值
+function getConfigValue(env, sysConfig, key) {
+  const item = CONFIG_ITEMS.find(c => c.key === key);
+  if (!item) return 0;
+  if (sysConfig && sysConfig[key] !== undefined) return sysConfig[key];
+  const envVal = parseInt(env[item.envKey]);
+  if (envVal > 0 || (key === 'maxPasswords' && envVal === 0)) return envVal || item.defaultVal;
+  return item.defaultVal;
+}
+
+// 安全解析整数：负数和非数字回退到 fallback
+function safeParseInt(val, fallback) {
+  const v = parseInt(val);
+  return v > 0 ? v : fallback;
+}
+
+// 从 env 读取可配置值，fallback 到默认值（同步版本，兼容现有调用）
+export function getMaxStorage(env) {
+  if (env._sysConfig) return getConfigValue(env, env._sysConfig, 'maxStorageMB') * 1024 * 1024;
+  return safeParseInt(env.MAX_STORAGE_MB, 300) * 1024 * 1024;
+}
+export function getStarMaxStorage(env) {
+  if (env._sysConfig) return getConfigValue(env, env._sysConfig, 'starMaxStorageMB') * 1024 * 1024;
+  return safeParseInt(env.STAR_MAX_STORAGE_MB, 50) * 1024 * 1024;
+}
+export function getEmlTtl(env) {
+  if (env._sysConfig) return getConfigValue(env, env._sysConfig, 'emlTtlDays') * 86400;
+  return safeParseInt(env.EML_TTL_DAYS, 60) * 86400;
+}
+export function getMaxEmailEntries(env) {
+  if (env._sysConfig) return getConfigValue(env, env._sysConfig, 'maxEmailEntries');
+  return safeParseInt(env.MAX_EMAIL_ENTRIES, 5000);
+}
+export function getRateThreshold(env) {
+  if (env._sysConfig) return getConfigValue(env, env._sysConfig, 'rateThreshold');
+  return safeParseInt(env.RATE_THRESHOLD, 10);
+}
+export function getRateWindow(env) {
+  if (env._sysConfig) return getConfigValue(env, env._sysConfig, 'rateWindowMin') * 60000;
+  return safeParseInt(env.RATE_WINDOW_MIN, 5) * 60000;
+}
+export function getAttachMaxSize(env) {
+  if (env._sysConfig) return getConfigValue(env, env._sysConfig, 'attachMaxSizeMB') * 1024 * 1024;
+  return safeParseInt(env.ATTACH_MAX_SIZE_MB, 5) * 1024 * 1024;
+}
+export function getBodyMaxLength(env) {
+  if (env._sysConfig) return getConfigValue(env, env._sysConfig, 'bodyMaxLength');
+  return safeParseInt(env.BODY_MAX_LEN, 1500);
+}
+export function getTrackingPixelSize(env) {
+  if (env._sysConfig) return getConfigValue(env, env._sysConfig, 'trackingPixelKB') * 1024;
+  return safeParseInt(env.TRACKING_PIXEL_KB, 2) * 1024;
+}
+export function getMaxPasswords(env) {
+  if (env._sysConfig) return getConfigValue(env, env._sysConfig, 'maxPasswords');
+  return safeParseInt(env.MAX_PASSWORDS, 0); // 0 = 不限
+}
+
+// 异步加载 sysConfig 并挂载到 env（在请求入口调用一次）
+export async function loadSystemConfig(env) {
+  env._sysConfig = await getSystemConfig(env);
+}
+
+// 获取某项当前生效值（用于 UI 显示）
+export function getEffectiveValue(env, key) {
+  return getConfigValue(env, env._sysConfig, key);
+}
 
 export const IMAGE_TTL_TIERS = [
   { max: 1 * 1024 * 1024, ttl: 5184000 },   // <1MB → 60d
@@ -25,13 +124,13 @@ export function getImageTtl(size) {
 // ============ 通用 KV ============
 
 export async function getKVList(env, key) {
-  if (!env.MAIL_CONFIG) return [];
+  if (!env.KV) return [];
   try {
-    const val = await env.MAIL_CONFIG.get(key);
+    const val = await env.KV.get(key);
     return val ? JSON.parse(val) : [];
   } catch { return []; }
 }
-export async function setKVList(env, key, list) { await env.MAIL_CONFIG.put(key, JSON.stringify(list)); }
+export async function setKVList(env, key, list) { await env.KV.put(key, JSON.stringify(list)); }
 
 // ============ 规则管理 ============
 
@@ -42,14 +141,14 @@ export async function setPausedRules(env, list) { await setKVList(env, 'paused_p
 
 // 每个前缀的域名限制
 export async function getPrefixDomains(env) {
-  if (!env.MAIL_CONFIG) return {};
+  if (!env.KV) return {};
   try {
-    const val = await env.MAIL_CONFIG.get('prefix_domains');
+    const val = await env.KV.get('prefix_domains');
     return val ? JSON.parse(val) : {};
   } catch { return {}; }
 }
 export async function setPrefixDomains(env, obj) {
-  await env.MAIL_CONFIG.put('prefix_domains', JSON.stringify(obj));
+  await env.KV.put('prefix_domains', JSON.stringify(obj));
 }
 
 // 屏蔽发件人
@@ -66,12 +165,12 @@ export async function setMutedPrefixes(env, list) { await setKVList(env, 'muted_
 
 // 全局静音
 export async function getGlobalMute(env) {
-  if (!env.MAIL_CONFIG) return false;
-  try { return (await env.MAIL_CONFIG.get('global_mute')) === 'true'; }
+  if (!env.KV) return false;
+  try { return (await env.KV.get('global_mute')) === 'true'; }
   catch { return false; }
 }
 export async function setGlobalMute(env, muted) {
-  await env.MAIL_CONFIG.put('global_mute', String(muted));
+  await env.KV.put('global_mute', String(muted));
 }
 
 export function isAllowedRecipient(to, activeRules, pausedRules, prefixDomains) {
@@ -89,9 +188,9 @@ export async function getPasswordList(env) { return getKVList(env, 'pwd_list'); 
 export async function setPasswordList(env, list) { return setKVList(env, 'pwd_list', list); }
 
 export async function getPasswordEntry(env, name) {
-  if (!env.MAIL_CONFIG) return null;
+  if (!env.KV) return null;
   try {
-    const val = await env.MAIL_CONFIG.get(`pwd:${name}`);
+    const val = await env.KV.get(`pwd:${name}`);
     if (!val) return null;
     const encrypted = JSON.parse(val);
     const plaintext = await decryptData(env, encrypted);
@@ -101,16 +200,16 @@ export async function getPasswordEntry(env, name) {
 
 export async function setPasswordEntry(env, name, entry, { overwrite = true } = {}) {
   if (!overwrite) {
-    const existing = await env.MAIL_CONFIG.get(`pwd:${name}`);
+    const existing = await env.KV.get(`pwd:${name}`);
     if (existing) throw new Error(`密码条目 "${name}" 已存在`);
   }
   const plaintext = JSON.stringify(entry);
   const encrypted = await encryptData(env, plaintext);
-  await env.MAIL_CONFIG.put(`pwd:${name}`, JSON.stringify(encrypted));
+  await env.KV.put(`pwd:${name}`, JSON.stringify(encrypted));
 }
 
 export async function deletePasswordEntry(env, name) {
-  await env.MAIL_CONFIG.delete(`pwd:${name}`);
+  await env.KV.delete(`pwd:${name}`);
 }
 
 export async function resolvePwdName(env, value) {
@@ -130,9 +229,9 @@ export async function getTrashList(env) { return getKVList(env, 'pwd_trash'); }
 export async function setTrashList(env, list) { return setKVList(env, 'pwd_trash', list); }
 
 export async function getTrashEntry(env, deletedAt) {
-  if (!env.MAIL_CONFIG) return null;
+  if (!env.KV) return null;
   try {
-    const val = await env.MAIL_CONFIG.get(`pwd:trash:${deletedAt}`);
+    const val = await env.KV.get(`pwd:trash:${deletedAt}`);
     if (!val) return null;
     const encrypted = JSON.parse(val);
     const plaintext = await decryptData(env, encrypted);
@@ -143,11 +242,11 @@ export async function getTrashEntry(env, deletedAt) {
 export async function setTrashEntry(env, deletedAt, entry) {
   const plaintext = JSON.stringify(entry);
   const encrypted = await encryptData(env, plaintext);
-  await env.MAIL_CONFIG.put(`pwd:trash:${deletedAt}`, JSON.stringify(encrypted));
+  await env.KV.put(`pwd:trash:${deletedAt}`, JSON.stringify(encrypted));
 }
 
 export async function deleteTrashEntry(env, deletedAt) {
-  await env.MAIL_CONFIG.delete(`pwd:trash:${deletedAt}`);
+  await env.KV.delete(`pwd:trash:${deletedAt}`);
 }
 
 export async function moveToTrash(env, name) {
@@ -221,12 +320,12 @@ export async function restoreFromTrash(env, deletedAt) {
 // ============ 邮件元数据 ============
 
 export async function saveMsgMeta(env, msgId, meta) {
-  await env.MAIL_CONFIG.put(`msg_meta:${msgId}`, JSON.stringify(meta), { expirationTtl: 604800 }); // 7天过期
+  await env.KV.put(`msg_meta:${msgId}`, JSON.stringify(meta), { expirationTtl: 604800 }); // 7天过期
 }
 export async function getMsgMeta(env, msgId) {
-  if (!env.MAIL_CONFIG) return null;
+  if (!env.KV) return null;
   try {
-    const val = await env.MAIL_CONFIG.get(`msg_meta:${msgId}`);
+    const val = await env.KV.get(`msg_meta:${msgId}`);
     return val ? JSON.parse(val) : null;
   } catch { return null; }
 }
@@ -273,7 +372,7 @@ export function buildStrippedEml(rawEmail) {
 export async function saveStrippedEml(env, msgId, rawEmail) {
   try {
     const stripped = buildStrippedEml(rawEmail);
-    await env.MAIL_CONFIG.put(`email_text:${msgId}`, stripped.buffer);
+    await env.KV.put(`email_text:${msgId}`, stripped.buffer);
     return stripped.byteLength;
   } catch (err) {
     console.log('Failed to store stripped eml:', err.message);
@@ -282,15 +381,15 @@ export async function saveStrippedEml(env, msgId, rawEmail) {
 }
 
 export async function getStrippedEml(env, msgId) {
-  if (!env.MAIL_CONFIG) return null;
+  if (!env.KV) return null;
   try {
-    return await env.MAIL_CONFIG.get(`email_text:${msgId}`, { type: 'arrayBuffer' });
+    return await env.KV.get(`email_text:${msgId}`, { type: 'arrayBuffer' });
   } catch { return null; }
 }
 
 export async function saveImage(env, msgId, idx, imageData) {
   try {
-    await env.MAIL_CONFIG.put(`img:${msgId}:${idx}`, imageData);
+    await env.KV.put(`img:${msgId}:${idx}`, imageData);
     return true;
   } catch (err) {
     console.log(`Failed to store image ${idx}:`, err.message);
@@ -299,9 +398,9 @@ export async function saveImage(env, msgId, idx, imageData) {
 }
 
 export async function getImage(env, msgId, idx) {
-  if (!env.MAIL_CONFIG) return null;
+  if (!env.KV) return null;
   try {
-    return await env.MAIL_CONFIG.get(`img:${msgId}:${idx}`, { type: 'arrayBuffer' });
+    return await env.KV.get(`img:${msgId}:${idx}`, { type: 'arrayBuffer' });
   } catch { return null; }
 }
 
@@ -309,13 +408,16 @@ export async function getImage(env, msgId, idx) {
 
 export async function checkEmailRate(env) {
   const now = Date.now();
+  const threshold = getRateThreshold(env);
+  const window = getRateWindow(env);
   try {
-    const val = await env.MAIL_CONFIG.get('email_rate');
+    const val = await env.KV.get('email_rate');
     let timestamps = val ? JSON.parse(val) : [];
-    timestamps = timestamps.filter(ts => now - ts < RATE_WINDOW);
+    timestamps = timestamps.filter(ts => now - ts < window);
     timestamps.push(now);
-    await env.MAIL_CONFIG.put('email_rate', JSON.stringify(timestamps), { expirationTtl: 600 });
-    return timestamps.length > RATE_THRESHOLD;
+    const ttl = Math.max(Math.ceil(window / 500), 60);
+    await env.KV.put('email_rate', JSON.stringify(timestamps), { expirationTtl: ttl });
+    return timestamps.length > threshold;
   } catch {
     return false;
   }
@@ -324,15 +426,15 @@ export async function checkEmailRate(env) {
 // ============ 邮件索引 ============
 
 export async function getEmailIndex(env) {
-  if (!env.MAIL_CONFIG) return { entries: [], totalSize: 0 };
+  if (!env.KV) return { entries: [], totalSize: 0 };
   try {
-    const val = await env.MAIL_CONFIG.get('email_index');
+    const val = await env.KV.get('email_index');
     return val ? JSON.parse(val) : { entries: [], totalSize: 0 };
   } catch { return { entries: [], totalSize: 0 }; }
 }
 
 export async function setEmailIndex(env, index) {
-  await env.MAIL_CONFIG.put('email_index', JSON.stringify(index));
+  await env.KV.put('email_index', JSON.stringify(index));
 }
 
 export function calcStorageUsage(index) {
@@ -344,14 +446,15 @@ export function calcStorageUsage(index) {
   return total;
 }
 
-export function cleanExpiredEntries(index) {
+export function cleanExpiredEntries(index, env) {
   const now = Date.now();
+  const emlTtl = env ? getEmlTtl(env) : EML_TTL;
   const removed = [];
   for (let i = index.entries.length - 1; i >= 0; i--) {
     const entry = index.entries[i];
     if (entry.starred) continue;
 
-    const textExpired = now > entry.ts + EML_TTL * 1000;
+    const textExpired = now > entry.ts + emlTtl * 1000;
     let allImagesExpired = (entry.images || []).length === 0;
     if (!allImagesExpired) {
       allImagesExpired = (entry.images || []).every(img => now > entry.ts + img.ttl * 1000);
@@ -368,7 +471,9 @@ export function cleanExpiredEntries(index) {
 }
 
 export async function evictForSpace(env, index, needed) {
-  const target = MAX_STORAGE - needed;
+  const maxStorage = getMaxStorage(env);
+  const emlTtl = getEmlTtl(env);
+  const target = maxStorage - needed;
   const now = Date.now();
   let evicted = 0;
 
@@ -383,7 +488,7 @@ export async function evictForSpace(env, index, needed) {
       const entrySize = (entry.textSize || 0) +
         (entry.images || []).reduce((s, img) => s + img.size, 0);
       const maxTtl = Math.max(
-        EML_TTL,
+        emlTtl,
         ...(entry.images || []).map(img => img.ttl),
         1
       ) * 1000;
@@ -400,9 +505,9 @@ export async function evictForSpace(env, index, needed) {
 
     const entry = index.entries[bestIdx];
     const delPromises = [];
-    if (entry.textSize > 0) delPromises.push(env.MAIL_CONFIG.delete(`email_text:${entry.id}`));
+    if (entry.textSize > 0) delPromises.push(env.KV.delete(`email_text:${entry.id}`));
     for (const img of (entry.images || [])) {
-      delPromises.push(env.MAIL_CONFIG.delete(`img:${entry.id}:${img.idx}`));
+      delPromises.push(env.KV.delete(`img:${entry.id}:${img.idx}`));
     }
     await Promise.all(delPromises);
 
@@ -418,16 +523,14 @@ export async function evictForSpace(env, index, needed) {
 
 // ============ 邮件索引清理 ============
 
-export const MAX_EMAIL_ENTRIES = 5000;
-
 export async function runEmailCleanup(env) {
   const idx = await getEmailIndex(env);
-  const expired = cleanExpiredEntries(idx);
+  const expired = cleanExpiredEntries(idx, env);
   if (expired.length > 0) {
     const delPromises = [];
     for (const ex of expired) {
-      if (ex.textSize > 0) delPromises.push(env.MAIL_CONFIG.delete(`email_text:${ex.id}`));
-      for (const img of (ex.images || [])) delPromises.push(env.MAIL_CONFIG.delete(`img:${ex.id}:${img.idx}`));
+      if (ex.textSize > 0) delPromises.push(env.KV.delete(`email_text:${ex.id}`));
+      for (const img of (ex.images || [])) delPromises.push(env.KV.delete(`img:${ex.id}:${img.idx}`));
     }
     await Promise.all(delPromises);
     await setEmailIndex(env, idx);
@@ -436,15 +539,16 @@ export async function runEmailCleanup(env) {
 }
 
 export async function trimOldEntries(env, idx) {
+  const maxEntries = getMaxEmailEntries(env);
   const nonStarred = idx.entries.filter(e => !e.starred);
-  if (nonStarred.length <= MAX_EMAIL_ENTRIES) return 0;
+  if (nonStarred.length <= maxEntries) return 0;
   nonStarred.sort((a, b) => a.ts - b.ts);
-  const excess = nonStarred.slice(0, nonStarred.length - MAX_EMAIL_ENTRIES);
+  const excess = nonStarred.slice(0, nonStarred.length - maxEntries);
   const excessIds = new Set(excess.map(e => e.id));
   const delPromises = [];
   for (const entry of excess) {
-    if (entry.textSize > 0) delPromises.push(env.MAIL_CONFIG.delete(`email_text:${entry.id}`));
-    for (const img of (entry.images || [])) delPromises.push(env.MAIL_CONFIG.delete(`img:${entry.id}:${img.idx}`));
+    if (entry.textSize > 0) delPromises.push(env.KV.delete(`email_text:${entry.id}`));
+    for (const img of (entry.images || [])) delPromises.push(env.KV.delete(`img:${entry.id}:${img.idx}`));
   }
   await Promise.all(delPromises);
   for (let i = idx.entries.length - 1; i >= 0; i--) {
@@ -457,20 +561,20 @@ export async function trimOldEntries(env, idx) {
 // ============ 搜索 ============
 
 export async function saveSearchQuery(env, keyword) {
-  await env.MAIL_CONFIG.put('search_query', keyword, { expirationTtl: 3600 });
+  await env.KV.put('search_query', keyword, { expirationTtl: 3600 });
 }
 
 export async function getSearchQuery(env) {
-  return await env.MAIL_CONFIG.get('search_query') || '';
+  return await env.KV.get('search_query') || '';
 }
 
 // ============ 管理页搜索 ============
 
 export async function saveMgmtSearch(env, keyword) {
-  await env.MAIL_CONFIG.put('mgmt_search', keyword, { expirationTtl: 3600 });
+  await env.KV.put('mgmt_search', keyword, { expirationTtl: 3600 });
 }
 export async function getMgmtSearch(env) {
-  if (!env.MAIL_CONFIG) return '';
-  try { return await env.MAIL_CONFIG.get('mgmt_search') || ''; }
+  if (!env.KV) return '';
+  try { return await env.KV.get('mgmt_search') || ''; }
   catch { return ''; }
 }

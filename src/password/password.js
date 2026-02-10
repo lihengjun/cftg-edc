@@ -9,7 +9,7 @@ import {
   deletePasswordEntry, resolvePwdName,
   getTrashList, setTrashList, deleteTrashEntry, getTrashEntry,
   moveToTrash, cleanExpiredTrash, restoreFromTrash,
-  PWD_TRASH_TTL,
+  PWD_TRASH_TTL, getMaxPasswords,
 } from '../shared/storage.js';
 
 export const PWD_PAGE_SIZE = 8;
@@ -265,6 +265,15 @@ export async function cmdPwdSave(name, env) {
     return;
   }
   name = cleanName;
+  // 检查密码条数限制
+  const maxPwd = getMaxPasswords(env);
+  if (maxPwd > 0) {
+    const currentList = await getPasswordList(env);
+    if (currentList.length >= maxPwd) {
+      await sendTelegramMessage(env, `❌ 已达密码上限（${maxPwd} 条），请删除旧条目后再添加`);
+      return;
+    }
+  }
   // 已存在则直接显示详情，不覆盖
   const existingEntry = await getPasswordEntry(env, name);
   if (existingEntry) {

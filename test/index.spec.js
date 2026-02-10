@@ -17,7 +17,11 @@ import worker, {
 	buildCompactNotificationText,
 	SEARCH_PAGE_SIZE,
 	checkEmailRate, RATE_WINDOW, RATE_THRESHOLD,
-	MAX_STORAGE, STAR_MAX_STORAGE, EML_TTL,
+	MAX_STORAGE, STAR_MAX_STORAGE, EML_TTL, MAX_EMAIL_ENTRIES,
+	getMaxStorage, getStarMaxStorage, getEmlTtl, getMaxEmailEntries, getRateThreshold, getMaxPasswords,
+	getRateWindow, getAttachMaxSize, getBodyMaxLength, getTrackingPixelSize,
+	CONFIG_ITEMS, getSystemConfig, setSystemConfig, getEffectiveValue, loadSystemConfig,
+	buildConfigText, buildConfigKeyboard,
 	deriveWebhookSecret,
 	encryptData, decryptData,
 	base32Decode, generateTOTP, parseTotpInput,
@@ -963,6 +967,53 @@ describe('storage constants', () => {
 	it('EML_TTL is 60 days', () => {
 		expect(EML_TTL).toBe(60 * 86400);
 	});
+	it('MAX_EMAIL_ENTRIES is 5000', () => {
+		expect(MAX_EMAIL_ENTRIES).toBe(5000);
+	});
+});
+
+describe('configurable storage functions', () => {
+	it('getMaxStorage returns default when env empty', () => {
+		expect(getMaxStorage({})).toBe(300 * 1024 * 1024);
+	});
+	it('getMaxStorage reads env.MAX_STORAGE_MB', () => {
+		expect(getMaxStorage({ MAX_STORAGE_MB: '500' })).toBe(500 * 1024 * 1024);
+	});
+	it('getStarMaxStorage returns default when env empty', () => {
+		expect(getStarMaxStorage({})).toBe(50 * 1024 * 1024);
+	});
+	it('getStarMaxStorage reads env.STAR_MAX_STORAGE_MB', () => {
+		expect(getStarMaxStorage({ STAR_MAX_STORAGE_MB: '100' })).toBe(100 * 1024 * 1024);
+	});
+	it('getEmlTtl returns default when env empty', () => {
+		expect(getEmlTtl({})).toBe(60 * 86400);
+	});
+	it('getEmlTtl reads env.EML_TTL_DAYS', () => {
+		expect(getEmlTtl({ EML_TTL_DAYS: '30' })).toBe(30 * 86400);
+	});
+	it('getMaxEmailEntries returns default when env empty', () => {
+		expect(getMaxEmailEntries({})).toBe(5000);
+	});
+	it('getMaxEmailEntries reads env.MAX_EMAIL_ENTRIES', () => {
+		expect(getMaxEmailEntries({ MAX_EMAIL_ENTRIES: '10000' })).toBe(10000);
+	});
+	it('getRateThreshold returns default when env empty', () => {
+		expect(getRateThreshold({})).toBe(10);
+	});
+	it('getRateThreshold reads env.RATE_THRESHOLD', () => {
+		expect(getRateThreshold({ RATE_THRESHOLD: '20' })).toBe(20);
+	});
+	it('getMaxPasswords returns 0 (unlimited) by default', () => {
+		expect(getMaxPasswords({})).toBe(0);
+	});
+	it('getMaxPasswords reads env.MAX_PASSWORDS', () => {
+		expect(getMaxPasswords({ MAX_PASSWORDS: '50' })).toBe(50);
+	});
+	it('handles invalid env values gracefully', () => {
+		expect(getMaxStorage({ MAX_STORAGE_MB: 'abc' })).toBe(300 * 1024 * 1024);
+		expect(getEmlTtl({ EML_TTL_DAYS: '' })).toBe(60 * 86400);
+		expect(getRateThreshold({ RATE_THRESHOLD: 'NaN' })).toBe(10);
+	});
 });
 
 // ============ Worker Handler 测试 ============
@@ -1158,7 +1209,7 @@ describe('checkEmailRate', () => {
 			get: async () => null,
 			put: async () => {},
 		};
-		const result = await checkEmailRate({ MAIL_CONFIG: mockKV });
+		const result = await checkEmailRate({ KV: mockKV });
 		expect(result).toBe(false); // 只有 1 条，远低于阈值
 	});
 	it('returns false when timestamps within threshold', async () => {
@@ -1169,7 +1220,7 @@ describe('checkEmailRate', () => {
 			get: async () => JSON.stringify(timestamps),
 			put: async () => {},
 		};
-		const result = await checkEmailRate({ MAIL_CONFIG: mockKV });
+		const result = await checkEmailRate({ KV: mockKV });
 		expect(result).toBe(false);
 	});
 	it('returns true when timestamps exceed threshold', async () => {
@@ -1180,7 +1231,7 @@ describe('checkEmailRate', () => {
 			get: async () => JSON.stringify(timestamps),
 			put: async () => {},
 		};
-		const result = await checkEmailRate({ MAIL_CONFIG: mockKV });
+		const result = await checkEmailRate({ KV: mockKV });
 		expect(result).toBe(true);
 	});
 	it('filters out expired timestamps', async () => {
@@ -1191,7 +1242,7 @@ describe('checkEmailRate', () => {
 			get: async () => JSON.stringify(oldTimestamps),
 			put: async () => {},
 		};
-		const result = await checkEmailRate({ MAIL_CONFIG: mockKV });
+		const result = await checkEmailRate({ KV: mockKV });
 		expect(result).toBe(false); // 清理后只剩当前 1 条
 	});
 	it('mixed old and new timestamps', async () => {
@@ -1203,14 +1254,14 @@ describe('checkEmailRate', () => {
 			get: async () => JSON.stringify([...recent, ...old]),
 			put: async () => {},
 		};
-		const result = await checkEmailRate({ MAIL_CONFIG: mockKV });
+		const result = await checkEmailRate({ KV: mockKV });
 		expect(result).toBe(false); // 6 <= 10
 	});
 	it('returns false on KV error', async () => {
 		const mockKV = {
 			get: async () => { throw new Error('KV down'); },
 		};
-		const result = await checkEmailRate({ MAIL_CONFIG: mockKV });
+		const result = await checkEmailRate({ KV: mockKV });
 		expect(result).toBe(false);
 	});
 });
@@ -1784,5 +1835,252 @@ describe('buildPwdListKeyboard with trash', () => {
 		const kb2 = buildPwdListKeyboard(list, 2, 2);
 		expect(kb0.inline_keyboard.flat().some(b => b.callback_data === 'ptl')).toBe(false);
 		expect(kb2.inline_keyboard.flat().some(b => b.callback_data === 'ptl')).toBe(true);
+	});
+});
+
+// ============ 配置管理 UI 测试 ============
+
+describe('CONFIG_ITEMS', () => {
+	it('defines 10 config items', () => {
+		expect(CONFIG_ITEMS.length).toBe(10);
+	});
+	it('each item has required fields', () => {
+		for (const item of CONFIG_ITEMS) {
+			expect(item).toHaveProperty('key');
+			expect(item).toHaveProperty('label');
+			expect(item).toHaveProperty('unit');
+			expect(item).toHaveProperty('min');
+			expect(item).toHaveProperty('max');
+			expect(item).toHaveProperty('defaultVal');
+			expect(item).toHaveProperty('envKey');
+			expect(item.min).toBeLessThanOrEqual(item.max);
+		}
+	});
+	it('has unique keys', () => {
+		const keys = CONFIG_ITEMS.map(c => c.key);
+		expect(new Set(keys).size).toBe(keys.length);
+	});
+	it('default values are within range', () => {
+		for (const item of CONFIG_ITEMS) {
+			expect(item.defaultVal).toBeGreaterThanOrEqual(item.min);
+			expect(item.defaultVal).toBeLessThanOrEqual(item.max);
+		}
+	});
+});
+
+describe('getSystemConfig / setSystemConfig', () => {
+	it('returns empty object when KV empty', async () => {
+		const mockKV = { get: async () => null, put: async () => {} };
+		const config = await getSystemConfig({ KV: mockKV });
+		expect(config).toEqual({});
+	});
+	it('returns stored config', async () => {
+		const stored = { maxStorageMB: 500, emlTtlDays: 30 };
+		const mockKV = { get: async () => JSON.stringify(stored), put: async () => {} };
+		const config = await getSystemConfig({ KV: mockKV });
+		expect(config).toEqual(stored);
+	});
+	it('sets config', async () => {
+		let savedVal;
+		const mockKV = { put: async (k, v) => { savedVal = v; } };
+		await setSystemConfig({ KV: mockKV }, { maxStorageMB: 500 });
+		expect(JSON.parse(savedVal)).toEqual({ maxStorageMB: 500 });
+	});
+	it('returns empty on KV error', async () => {
+		const mockKV = { get: async () => { throw new Error('fail'); } };
+		const config = await getSystemConfig({ KV: mockKV });
+		expect(config).toEqual({});
+	});
+	it('returns empty when no KV', async () => {
+		const config = await getSystemConfig({});
+		expect(config).toEqual({});
+	});
+});
+
+describe('loadSystemConfig + getEffectiveValue', () => {
+	it('loads config and makes getEffectiveValue work', async () => {
+		const stored = { maxStorageMB: 500 };
+		const mockKV = { get: async () => JSON.stringify(stored) };
+		const env = { KV: mockKV };
+		await loadSystemConfig(env);
+		expect(getEffectiveValue(env, 'maxStorageMB')).toBe(500);
+		// 未修改的项返回默认值
+		expect(getEffectiveValue(env, 'emlTtlDays')).toBe(60);
+	});
+	it('env variable overrides default but KV overrides env', async () => {
+		const stored = { maxStorageMB: 800 };
+		const mockKV = { get: async () => JSON.stringify(stored) };
+		const env = { KV: mockKV, MAX_STORAGE_MB: '600' };
+		await loadSystemConfig(env);
+		// KV 值 800 优先于 env 值 600
+		expect(getEffectiveValue(env, 'maxStorageMB')).toBe(800);
+	});
+	it('falls back to env when KV has no value', async () => {
+		const mockKV = { get: async () => '{}' };
+		const env = { KV: mockKV, MAX_STORAGE_MB: '600' };
+		await loadSystemConfig(env);
+		expect(getEffectiveValue(env, 'maxStorageMB')).toBe(600);
+	});
+	it('falls back to default when no KV and no env', async () => {
+		const mockKV = { get: async () => '{}' };
+		const env = { KV: mockKV };
+		await loadSystemConfig(env);
+		expect(getEffectiveValue(env, 'maxStorageMB')).toBe(300);
+	});
+});
+
+describe('get* functions with _sysConfig', () => {
+	it('getMaxStorage uses KV config when _sysConfig present', () => {
+		const env = { _sysConfig: { maxStorageMB: 500 } };
+		expect(getMaxStorage(env)).toBe(500 * 1024 * 1024);
+	});
+	it('getStarMaxStorage uses KV config', () => {
+		const env = { _sysConfig: { starMaxStorageMB: 100 } };
+		expect(getStarMaxStorage(env)).toBe(100 * 1024 * 1024);
+	});
+	it('getEmlTtl uses KV config', () => {
+		const env = { _sysConfig: { emlTtlDays: 30 } };
+		expect(getEmlTtl(env)).toBe(30 * 86400);
+	});
+	it('getMaxEmailEntries uses KV config', () => {
+		const env = { _sysConfig: { maxEmailEntries: 10000 } };
+		expect(getMaxEmailEntries(env)).toBe(10000);
+	});
+	it('getRateThreshold uses KV config', () => {
+		const env = { _sysConfig: { rateThreshold: 20 } };
+		expect(getRateThreshold(env)).toBe(20);
+	});
+	it('getMaxPasswords uses KV config', () => {
+		const env = { _sysConfig: { maxPasswords: 50 } };
+		expect(getMaxPasswords(env)).toBe(50);
+	});
+	it('getRateWindow uses KV config (returns ms)', () => {
+		const env = { _sysConfig: { rateWindowMin: 10 } };
+		expect(getRateWindow(env)).toBe(10 * 60000);
+	});
+	it('getAttachMaxSize uses KV config (returns bytes)', () => {
+		const env = { _sysConfig: { attachMaxSizeMB: 10 } };
+		expect(getAttachMaxSize(env)).toBe(10 * 1024 * 1024);
+	});
+	it('getBodyMaxLength uses KV config', () => {
+		const env = { _sysConfig: { bodyMaxLength: 2000 } };
+		expect(getBodyMaxLength(env)).toBe(2000);
+	});
+	it('getTrackingPixelSize uses KV config (returns bytes)', () => {
+		const env = { _sysConfig: { trackingPixelKB: 5 } };
+		expect(getTrackingPixelSize(env)).toBe(5 * 1024);
+	});
+	it('falls back to default when _sysConfig is empty', () => {
+		const env = { _sysConfig: {} };
+		expect(getMaxStorage(env)).toBe(300 * 1024 * 1024);
+		expect(getStarMaxStorage(env)).toBe(50 * 1024 * 1024);
+		expect(getEmlTtl(env)).toBe(60 * 86400);
+		expect(getRateWindow(env)).toBe(5 * 60000);
+		expect(getAttachMaxSize(env)).toBe(5 * 1024 * 1024);
+		expect(getBodyMaxLength(env)).toBe(1500);
+		expect(getTrackingPixelSize(env)).toBe(2 * 1024);
+	});
+	it('still works without _sysConfig (backward compat)', () => {
+		expect(getMaxStorage({})).toBe(300 * 1024 * 1024);
+		expect(getMaxStorage({ MAX_STORAGE_MB: '500' })).toBe(500 * 1024 * 1024);
+	});
+});
+
+describe('buildConfigText', () => {
+	it('shows all config items with default values', () => {
+		const env = { _sysConfig: {} };
+		const text = buildConfigText(env, null);
+		expect(text).toContain('⚙️');
+		expect(text).toContain('系统设置');
+		expect(text).toContain('邮件存储上限');
+		expect(text).toContain('300 MB');
+		expect(text).toContain('收藏存储上限');
+		expect(text).toContain('50 MB');
+		expect(text).toContain('邮件保留天数');
+		expect(text).toContain('60 天');
+		expect(text).toContain('邮件最大条目');
+		expect(text).toContain('5000 条');
+		expect(text).toContain('高频阈值');
+		expect(text).toContain('10 封');
+		expect(text).toContain('高频窗口');
+		expect(text).toContain('5 分钟');
+		expect(text).toContain('附件上限');
+		expect(text).toContain('5 MB');
+		expect(text).toContain('正文截断');
+		expect(text).toContain('1500 字符');
+		expect(text).toContain('追踪像素');
+		expect(text).toContain('2 KB');
+		expect(text).toContain('密码条数上限');
+		expect(text).toContain('不限');
+	});
+	it('shows modified values from KV config', () => {
+		const env = { _sysConfig: { maxStorageMB: 500, emlTtlDays: 30 } };
+		const text = buildConfigText(env, null);
+		expect(text).toContain('500 MB');
+		expect(text).toContain('30 天');
+	});
+	it('shows storage info when provided', () => {
+		const env = { _sysConfig: {} };
+		const si = { used: 50 * 1024 * 1024, total: 300 * 1024 * 1024, starUsed: 10 * 1024 * 1024, starTotal: 50 * 1024 * 1024 };
+		const text = buildConfigText(env, si);
+		expect(text).toContain('💾 邮件');
+		expect(text).toContain('50.0MB');
+		expect(text).toContain('⭐ 收藏');
+		expect(text).toContain('10.0MB');
+	});
+	it('maxPasswords shows number when non-zero', () => {
+		const env = { _sysConfig: { maxPasswords: 100 } };
+		const text = buildConfigText(env, null);
+		expect(text).toContain('100 条');
+		expect(text).not.toContain('不限');
+	});
+});
+
+describe('buildConfigKeyboard', () => {
+	it('has 5 rows of config buttons + restore + back', () => {
+		const kb = buildConfigKeyboard();
+		const rows = kb.inline_keyboard;
+		// 10 items in pairs → 5 rows, + restore row + back row = 7 rows
+		expect(rows.length).toBe(7);
+	});
+	it('each config button has cfg_e: prefix', () => {
+		const kb = buildConfigKeyboard();
+		const configBtns = kb.inline_keyboard.slice(0, 5).flat();
+		for (const btn of configBtns) {
+			expect(btn.callback_data).toMatch(/^cfg_e:/);
+		}
+		expect(configBtns.length).toBe(10);
+	});
+	it('has restore default button', () => {
+		const kb = buildConfigKeyboard();
+		const allData = kb.inline_keyboard.flat().map(b => b.callback_data);
+		expect(allData).toContain('cfg_rst');
+	});
+	it('has back button', () => {
+		const kb = buildConfigKeyboard();
+		const allData = kb.inline_keyboard.flat().map(b => b.callback_data);
+		expect(allData).toContain('back');
+	});
+	it('buttons reference valid config keys', () => {
+		const kb = buildConfigKeyboard();
+		const validKeys = CONFIG_ITEMS.map(c => c.key);
+		const configBtns = kb.inline_keyboard.slice(0, 5).flat();
+		for (const btn of configBtns) {
+			const key = btn.callback_data.replace('cfg_e:', '');
+			expect(validKeys).toContain(key);
+		}
+	});
+});
+
+describe('buildListKeyboard does not include config button', () => {
+	it('no cfg button in empty list', () => {
+		const kb = buildListKeyboard([], [], false, 0);
+		const allData = kb.inline_keyboard.flat().map(b => b.callback_data);
+		expect(allData).not.toContain('cfg');
+	});
+	it('no cfg button when rules exist', () => {
+		const kb = buildListKeyboard(['test'], [], false, 0);
+		const allData = kb.inline_keyboard.flat().map(b => b.callback_data);
+		expect(allData).not.toContain('cfg');
 	});
 });

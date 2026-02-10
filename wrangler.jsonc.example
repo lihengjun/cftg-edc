@@ -10,6 +10,15 @@
 		"nodejs_compat"
 	],
 	"kv_namespaces": [
-		{ "binding": "MAIL_CONFIG", "id": "<your-kv-namespace-id>" }
+		{ "binding": "KV", "id": "<your-kv-namespace-id>" }
 	]
+	// 存储限制配置（可选，取消注释并修改值即可）
+	// "vars": {
+	// 	"MAX_STORAGE_MB": "300",        // 邮件总存储上限(MB)
+	// 	"STAR_MAX_STORAGE_MB": "50",    // 收藏存储上限(MB)
+	// 	"EML_TTL_DAYS": "60",           // 精简.eml保留天数
+	// 	"MAX_EMAIL_ENTRIES": "5000",    // 邮件索引最大条目数
+	// 	"RATE_THRESHOLD": "10",         // 频率检测阈值(5分钟内)
+	// 	"MAX_PASSWORDS": "0"            // 密码最大条数(0=不限)
+	// }
 }

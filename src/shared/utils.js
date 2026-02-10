@@ -44,6 +44,7 @@ export function formatSize(bytes) {
 }
 
 export function htmlToText(html) {
+  if (!html) return '';
   let text = html;
   // 移除不可见内容
   text = text.replace(/<style[^>]*>.*?<\/style>/gis, '');
