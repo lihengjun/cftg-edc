@@ -15,7 +15,9 @@ export function buildConfigText(env, storageInfo) {
   for (const item of CONFIG_ITEMS) {
     const val = getEffectiveValue(env, item.key);
     const display = item.key === 'maxPasswords' && val === 0 ? '不限' : `${val} ${item.unit}`;
-    text += `${item.label}：${display}\n`;
+    text += `${item.label}：${display}`;
+    if (item.desc) text += `（${item.desc}）`;
+    text += '\n';
   }
   if (storageInfo) {
     text += `\n💾 邮件：${formatSize(storageInfo.used)} / ${formatSize(storageInfo.total)}`;
@@ -100,7 +102,9 @@ export async function handleConfigCallback(cbq, env) {
       await loadSystemConfig(env);
       const current = getEffectiveValue(env, value);
       const display = item.key === 'maxPasswords' && current === 0 ? '不限' : `${current}`;
-      const promptText = `⚙️ 设置${item.label}\n\n当前值：${display} ${item.unit}\n有效范围：${item.min}-${item.max}${item.key === 'maxPasswords' ? '（0=不限）' : ''}`;
+      let promptText = `⚙️ 设置${item.label}\n`;
+      if (item.desc) promptText += `${item.desc}\n`;
+      promptText += `\n当前值：${display} ${item.unit}\n有效范围：${item.min}-${item.max}${item.key === 'maxPasswords' ? '（0=不限）' : ''}`;
       await sendTelegramPrompt(env, promptText);
     }
     await answerCallbackQuery(env, cbq.id);

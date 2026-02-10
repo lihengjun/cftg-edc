@@ -17,11 +17,11 @@ export const CONFIG_ITEMS = [
   { key: 'starMaxStorageMB', label: '⭐ 收藏存储上限', unit: 'MB',  min: 5,   max: 1000,  defaultVal: 50,   envKey: 'STAR_MAX_STORAGE_MB' },
   { key: 'emlTtlDays',       label: '📧 邮件保留天数', unit: '天',  min: 1,   max: 365,   defaultVal: 60,   envKey: 'EML_TTL_DAYS' },
   { key: 'maxEmailEntries',  label: '📋 邮件最大条目', unit: '条',  min: 100, max: 50000, defaultVal: 5000,  envKey: 'MAX_EMAIL_ENTRIES' },
-  { key: 'rateThreshold',    label: '📈 高频阈值',     unit: '封',   min: 1,   max: 100,   defaultVal: 10,   envKey: 'RATE_THRESHOLD' },
-  { key: 'rateWindowMin',    label: '⏱️ 高频窗口',    unit: '分钟', min: 1,   max: 30,    defaultVal: 5,    envKey: 'RATE_WINDOW_MIN' },
-  { key: 'attachMaxSizeMB',  label: '📎 附件上限',    unit: 'MB',   min: 1,   max: 20,    defaultVal: 5,    envKey: 'ATTACH_MAX_SIZE_MB' },
-  { key: 'bodyMaxLength',    label: '📝 正文截断',    unit: '字符', min: 200, max: 3500,  defaultVal: 1500, envKey: 'BODY_MAX_LEN' },
-  { key: 'trackingPixelKB',  label: '🔍 追踪像素',    unit: 'KB',   min: 1,   max: 50,    defaultVal: 2,    envKey: 'TRACKING_PIXEL_KB' },
+  { key: 'rateThreshold',    label: '📈 高频阈值',     unit: '封',   min: 1,   max: 100,   defaultVal: 10,   envKey: 'RATE_THRESHOLD',     desc: '超过则切换精简通知' },
+  { key: 'rateWindowMin',    label: '⏱️ 高频窗口',    unit: '分钟', min: 1,   max: 30,    defaultVal: 5,    envKey: 'RATE_WINDOW_MIN',    desc: '检测高频的时间范围' },
+  { key: 'attachMaxSizeMB',  label: '📎 附件上限',    unit: 'MB',   min: 1,   max: 20,    defaultVal: 5,    envKey: 'ATTACH_MAX_SIZE_MB', desc: '超过只列出不发送' },
+  { key: 'bodyMaxLength',    label: '📝 正文截断',    unit: '字符', min: 200, max: 3500,  defaultVal: 1500, envKey: 'BODY_MAX_LEN',       desc: '通知中正文最大显示长度' },
+  { key: 'trackingPixelKB',  label: '🔍 追踪像素',    unit: 'KB',   min: 1,   max: 50,    defaultVal: 2,    envKey: 'TRACKING_PIXEL_KB',  desc: '小于此的内嵌小图自动忽略' },
   { key: 'maxPasswords',     label: '🔐 密码条数上限', unit: '条',   min: 0,   max: 10000, defaultVal: 0,    envKey: 'MAX_PASSWORDS' },
 ];
 
