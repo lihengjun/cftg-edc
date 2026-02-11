@@ -1,3 +1,5 @@
+[中文](README.zh-CN.md) | English
+
 # CFTG-EDC
 
 **CloudFlare + TeleGram Every Day Carry** — a personal toolkit running on Cloudflare Workers, managed entirely through Telegram.
@@ -80,7 +82,7 @@ Incoming Email
 
 ## Quick Start
 
-See the **[Setup Guide](docs/setup-guide.md)** for a complete step-by-step tutorial.
+See the **[Setup Guide](docs/setup-guide.md)** for a complete step-by-step tutorial (Chinese).
 
 **TL;DR:**
 
