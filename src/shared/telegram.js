@@ -165,6 +165,24 @@ export async function editMessageText(env, msgId, text, replyMarkup) {
   );
 }
 
+export async function getFileUrl(env, fileId) {
+  const result = await fetchWithRetry(
+    `https://api.telegram.org/bot${env.TG_BOT_TOKEN}/getFile`,
+    { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ file_id: fileId }) },
+    'getFile',
+  );
+  if (!result?.ok) return null;
+  return `https://api.telegram.org/file/bot${env.TG_BOT_TOKEN}/${result.result.file_path}`;
+}
+
+export async function downloadTelegramFile(env, fileId) {
+  const url = await getFileUrl(env, fileId);
+  if (!url) return null;
+  const resp = await fetch(url);
+  if (!resp.ok) return null;
+  return resp.text();
+}
+
 export async function answerCallbackQuery(env, callbackQueryId, text) {
   const payload = { callback_query_id: callbackQueryId };
   if (text) payload.text = text;

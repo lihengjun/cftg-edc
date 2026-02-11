@@ -248,7 +248,6 @@ export async function cmdPwdList(env) {
   });
   if (!result?.ok) {
     console.error('cmdPwdList failed:', JSON.stringify(result));
-    // 降级：不带键盘发送，附带错误信息
     const errDesc = result?.description || 'unknown';
     await sendTelegramMessage(env, buildPwdListText(list, 0) + `\n\n⚠️ 键盘加载失败: ${esc(errDesc)}`);
   }
@@ -265,7 +264,6 @@ export async function cmdPwdSave(name, env) {
     return;
   }
   name = cleanName;
-  // 检查密码条数限制
   const maxPwd = getMaxPasswords(env);
   if (maxPwd > 0) {
     const currentList = await getPasswordList(env);
@@ -274,7 +272,6 @@ export async function cmdPwdSave(name, env) {
       return;
     }
   }
-  // 已存在则直接显示详情，不覆盖
   const existingEntry = await getPasswordEntry(env, name);
   if (existingEntry) {
     await sendTelegramMessage(env, `⚠️ 该名称已存在，已跳转到对应条目\n\n` + buildPwdDetailText(name, existingEntry, false), null, {
@@ -282,7 +279,6 @@ export async function cmdPwdSave(name, env) {
     });
     return;
   }
-  // 创建空条目
   const entry = { username: '', password: '', note: '', totp: '' };
   await setPasswordEntry(env, name, entry, { overwrite: false });
   const list = await getPasswordList(env);

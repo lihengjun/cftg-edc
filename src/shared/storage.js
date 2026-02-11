@@ -558,6 +558,81 @@ export async function trimOldEntries(env, idx) {
   return excess.length;
 }
 
+// ============ 密码备份 ============
+
+export const BACKUP_TTL = 2678400; // 31 days in seconds
+
+export async function getBackupIndex(env) {
+  return getKVList(env, 'pwd_backup_index');
+}
+
+export async function setBackupIndex(env, index) {
+  return setKVList(env, 'pwd_backup_index', index);
+}
+
+export async function runPasswordBackup(env) {
+  const list = await getPasswordList(env);
+  if (list.length === 0) return { ok: true, count: 0 };
+
+  const entries = {};
+  for (const item of list) {
+    const raw = await env.KV.get(`pwd:${item.name}`);
+    if (raw) entries[item.name] = raw;
+  }
+
+  const date = new Date().toISOString().slice(0, 10);
+  const payload = JSON.stringify({ pwd_list: list, entries });
+  await env.KV.put(`pwd_backup:${date}`, payload, { expirationTtl: BACKUP_TTL });
+
+  const index = await getBackupIndex(env);
+  const existing = index.findIndex(i => i.date === date);
+  if (existing !== -1) {
+    index[existing].count = list.length;
+  } else {
+    index.push({ date, count: list.length });
+  }
+  // 清理 >31 天的旧索引
+  const cutoff = Date.now() - BACKUP_TTL * 1000;
+  const cleaned = index.filter(i => new Date(i.date).getTime() > cutoff);
+  cleaned.sort((a, b) => b.date.localeCompare(a.date));
+  await setBackupIndex(env, cleaned);
+
+  return { ok: true, count: list.length, date };
+}
+
+export async function restorePasswordBackup(env, date) {
+  const raw = await env.KV.get(`pwd_backup:${date}`);
+  if (!raw) return { ok: false, error: '备份不存在或已过期' };
+
+  const backup = JSON.parse(raw);
+  await replaceAllPasswords(env, null, backup);
+  return { ok: true, count: backup.pwd_list.length };
+}
+
+export async function replaceAllPasswords(env, entries, rawBackup) {
+  // 删除旧数据
+  const oldList = await getPasswordList(env);
+  await Promise.all(oldList.map(item => deletePasswordEntry(env, item.name)));
+
+  if (rawBackup) {
+    // 从备份恢复（已加密的原始数据）
+    for (const [name, encrypted] of Object.entries(rawBackup.entries)) {
+      await env.KV.put(`pwd:${name}`, encrypted);
+    }
+    await setPasswordList(env, rawBackup.pwd_list);
+  } else {
+    // 从导入数据写入（明文 entries）
+    const newList = [];
+    for (const entry of entries) {
+      const name = entry.name;
+      const data = { username: entry.username || '', password: entry.password || '', note: entry.note || '', totp: entry.totp || '' };
+      await setPasswordEntry(env, name, data);
+      newList.push({ name, ts: Date.now() });
+    }
+    await setPasswordList(env, newList);
+  }
+}
+
 // ============ 搜索 ============
 
 export async function saveSearchQuery(env, keyword) {

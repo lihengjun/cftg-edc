@@ -1,9 +1,9 @@
 import { deriveWebhookSecret } from './shared/utils.js';
 import { sendTelegramMessage, answerCallbackQuery } from './shared/telegram.js';
-import { loadSystemConfig } from './shared/storage.js';
+import { loadSystemConfig, runPasswordBackup } from './shared/storage.js';
 import { cmdList, cmdSearch, handleEmailCallback, handleEmailReply, handleIncomingEmail } from './email/email.js';
 import { cmdPwdList, cmdPwdSave, handlePwdCallback, handlePwdReply } from './password/password.js';
-import { cmdConfig, handleConfigCallback, handleConfigReply } from './config/config.js';
+import { cmdConfig, handleConfigCallback, handleConfigReply, handleImportFile } from './config/config.js';
 
 // ============ 回调 action 前缀集合 ============
 
@@ -13,7 +13,11 @@ const PWD_ACTIONS = new Set([
   'ptl', 'ptv', 'ptr', 'ptd', 'ptcd', 'ptp', 'ptca', 'ptcca',
 ]);
 
-const CONFIG_ACTIONS = new Set(['cfg', 'cfg_e', 'cfg_rst', 'cfg_rsta']);
+const CONFIG_ACTIONS = new Set([
+  'cfg', 'cfg_e', 'cfg_rst', 'cfg_rsta', 'cfg_mail', 'cfg_pwd',
+  'cfg_ex', 'cfg_xp', 'cfg_xa', 'cfg_xk', 'cfg_im', 'cfg_ic', 'cfg_in',
+  'cfg_bk', 'cfg_br', 'cfg_brc',
+]);
 
 // ============ Webhook 路由 ============
 
@@ -44,7 +48,24 @@ export async function handleTelegramWebhook(request, env, ctx) {
   }
 
   const msg = update.message;
-  if (!msg || !msg.text) return new Response('OK');
+  if (!msg) return new Response('OK');
+
+  // 处理文件上传（密码导入）
+  if (msg.document) {
+    const chatId = String(msg.chat.id);
+    if (chatId !== String(env.TG_CHAT_ID)) return new Response('OK');
+    try {
+      const importMode = await env.KV.get('pwd_import_mode');
+      if (importMode === 'waiting') {
+        await handleImportFile(msg, env);
+      }
+    } catch (err) {
+      console.error('Document handling error:', err);
+    }
+    return new Response('OK');
+  }
+
+  if (!msg.text) return new Response('OK');
 
   // 安全验证：只响应配置的 chat_id
   const chatId = String(msg.chat.id);
@@ -58,7 +79,7 @@ export async function handleTelegramWebhook(request, env, ctx) {
   // 处理用户回复 ForceReply 提示的输入（命令优先）
   const replyTo = msg.reply_to_message;
   if (replyTo && replyTo.text && !text.startsWith('/')) {
-    if (replyTo.text.startsWith('⚙️')) {
+    if (replyTo.text.startsWith('⚙️') || replyTo.text.startsWith('🔑')) {
       await handleConfigReply(msg, replyTo, text, env);
     } else if (replyTo.text.startsWith('🔐')) {
       await handlePwdReply(msg, replyTo, text, env);
@@ -130,10 +151,22 @@ export default {
         { command: 'pwd', description: '密码管理' },
         { command: 'config', description: '系统设置' },
       ];
+      // 清除默认 scope 的命令（别人看不到菜单）
+      const delRes = await fetch(`https://api.telegram.org/bot${env.TG_BOT_TOKEN}/deleteMyCommands`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      results.deleteDefaultCommands = await delRes.json();
+
+      // 仅对自己的 chat 设置命令菜单
       const cmdRes = await fetch(`https://api.telegram.org/bot${env.TG_BOT_TOKEN}/setMyCommands`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ commands }),
+        body: JSON.stringify({
+          commands,
+          scope: { type: 'chat', chat_id: env.TG_CHAT_ID },
+        }),
       });
       results.commands = await cmdRes.json();
 
@@ -147,6 +180,14 @@ export default {
   async email(message, env, ctx) {
     await loadSystemConfig(env);
     await handleIncomingEmail(message, env);
+  },
+
+  async scheduled(event, env, ctx) {
+    await loadSystemConfig(env);
+    const result = await runPasswordBackup(env);
+    if (result.ok) {
+      console.log(`Password backup: ${result.count} entries backed up (${result.date})`);
+    }
   },
 };
 

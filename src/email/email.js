@@ -251,12 +251,7 @@ export function buildListKeyboard(active, paused, globalMute, starredCount) {
     { text: '🎲 随机前缀', callback_data: 'random' },
   ];
   rows.push(addRow);
-  const mgmtRow = [{ text: '📧 邮箱管理', callback_data: 'em' }];
-  if (starredCount > 0) {
-    mgmtRow.push({ text: `⭐ 收藏 (${starredCount})`, callback_data: 'starlist' });
-  }
-  rows.push(mgmtRow);
-  const ctrlRow = [];
+  const ctrlRow = [{ text: '📧 邮箱管理', callback_data: 'em' }];
   if (active.length > 0) {
     ctrlRow.push({ text: '⏸️ 暂停全部', callback_data: 'pause_all' });
   } else if (paused.length > 0) {
@@ -266,6 +261,9 @@ export function buildListKeyboard(active, paused, globalMute, starredCount) {
     ? { text: '🔔 取消静音', callback_data: 'global_unmute' }
     : { text: '🔇 全局静音', callback_data: 'global_mute' });
   rows.push(ctrlRow);
+  if (starredCount > 0) {
+    rows.push([{ text: `⭐ 收藏 (${starredCount})`, callback_data: 'starlist' }]);
+  }
   return { inline_keyboard: rows };
 }
 

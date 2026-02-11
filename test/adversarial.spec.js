@@ -12,7 +12,7 @@ import {
 	getRateThreshold, getMaxPasswords,
 	getRateWindow, getAttachMaxSize, getBodyMaxLength, getTrackingPixelSize,
 	CONFIG_ITEMS, getEffectiveValue, loadSystemConfig, setSystemConfig,
-	buildConfigText, buildConfigKeyboard,
+	buildConfigText, buildConfigKeyboard, buildMailConfigText,
 	buildListText, buildListKeyboard,
 	buildSettingsText, buildSettingsKeyboard,
 	buildEmailActionKeyboard,
@@ -306,66 +306,49 @@ describe('getConfigValue 不做范围校验', () => {
 
 // ============ buildConfigKeyboard 布局验证 ============
 
-describe('buildConfigKeyboard 10 项布局', () => {
+describe('buildConfigKeyboard 主页布局', () => {
 	it('键盘布局匹配预期', () => {
 		const kb = buildConfigKeyboard();
 		const rows = kb.inline_keyboard;
-		expect(rows.length).toBe(7); // 5 config rows + restore + back
+		expect(rows.length).toBe(2); // mail+pwd, back
 
-		// 验证配对
-		expect(rows[0][0].text).toContain('邮件存储上限');
-		expect(rows[0][1].text).toContain('收藏存储上限');
-		expect(rows[1][0].text).toContain('邮件保留天数');
-		expect(rows[1][1].text).toContain('邮件最大条目');
-		expect(rows[2][0].text).toContain('高频阈值');
-		expect(rows[2][1].text).toContain('高频窗口');
-		expect(rows[3][0].text).toContain('附件上限');
-		expect(rows[3][1].text).toContain('正文截断');
-		expect(rows[4][0].text).toContain('追踪像素');
-		expect(rows[4][1].text).toContain('密码条数上限');
-
-		// restore 和 back
-		expect(rows[5][0].callback_data).toBe('cfg_rst');
-		expect(rows[6][0].callback_data).toBe('back');
-	});
-
-	it('cfg_rst 确认替换位置正确（倒数第二行）', () => {
-		const kb = buildConfigKeyboard();
-		// 模拟 handleConfigCallback 中 cfg_rst 的替换逻辑
-		kb.inline_keyboard[kb.inline_keyboard.length - 2] = [
-			{ text: '⚠️ 确认恢复', callback_data: 'cfg_rsta' },
-			{ text: '取消', callback_data: 'cfg' },
-		];
-		// 确认替换的是恢复默认行，不是 back 行
-		expect(kb.inline_keyboard[kb.inline_keyboard.length - 1][0].callback_data).toBe('back');
-		expect(kb.inline_keyboard[kb.inline_keyboard.length - 2][0].callback_data).toBe('cfg_rsta');
+		expect(rows[0][0].callback_data).toBe('cfg_mail');
+		expect(rows[0][1].callback_data).toBe('cfg_pwd');
+		expect(rows[1][0].callback_data).toBe('back');
 	});
 });
 
 // ============ buildConfigText 新配置项显示 ============
 
-describe('buildConfigText 新配置项显示', () => {
+describe('buildMailConfigText 邮件配置项显示', () => {
 	it('rateThreshold 单位显示为 "封" 而非 "封/5分钟"', () => {
 		const env = { _sysConfig: {} };
-		const text = buildConfigText(env, null);
+		const text = buildMailConfigText(env, null);
 		expect(text).toContain('10 封');
 		expect(text).not.toContain('封/5分钟');
 	});
 
 	it('修改后的值正确显示', () => {
 		const env = { _sysConfig: { rateWindowMin: 10, bodyMaxLength: 2000, trackingPixelKB: 5 } };
-		const text = buildConfigText(env, null);
+		const text = buildMailConfigText(env, null);
 		expect(text).toContain('10 分钟');
 		expect(text).toContain('2000 字符');
 		expect(text).toContain('5 KB');
 	});
 
-	it('所有 10 项都出现在配置文本中', () => {
+	it('所有 9 项邮件配置都出现在文本中', () => {
 		const env = { _sysConfig: {} };
-		const text = buildConfigText(env, null);
+		const text = buildMailConfigText(env, null);
 		for (const item of CONFIG_ITEMS) {
+			if (item.key === 'maxPasswords') continue;
 			expect(text).toContain(item.label);
 		}
+	});
+
+	it('不包含密码条数上限', () => {
+		const env = { _sysConfig: {} };
+		const text = buildMailConfigText(env, null);
+		expect(text).not.toContain('密码条数上限');
 	});
 });
 
@@ -409,7 +392,7 @@ describe('密码模块边界条件', () => {
 	it('buildPwdListKeyboard 空列表仍有新建和回收站按钮', () => {
 		const kb = buildPwdListKeyboard([], 0, 0);
 		const rows = kb.inline_keyboard;
-		expect(rows.length).toBe(1);
+		expect(rows.length).toBe(1); // action row only
 		expect(rows[0][0].text).toContain('新建');
 		expect(rows[0][1].text).toContain('回收站');
 	});

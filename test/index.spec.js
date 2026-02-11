@@ -24,10 +24,17 @@ import worker, {
 	buildConfigText, buildConfigKeyboard,
 	deriveWebhookSecret,
 	encryptData, decryptData,
+	encryptWithPassword, decryptWithPassword, deriveKeyFromPassword,
 	base32Decode, generateTOTP, parseTotpInput,
 	buildPwdListText, buildPwdListKeyboard, buildPwdDetailText, buildPwdDetailKeyboard, buildPwdEditKeyboard,
 	buildTrashListText, buildTrashListKeyboard, buildTrashDetailText, buildTrashDetailKeyboard,
 	PWD_PAGE_SIZE, PWD_TRASH_TTL,
+	getBackupIndex, setBackupIndex, BACKUP_TTL,
+	getPasswordList, setPasswordList, getPasswordEntry, setPasswordEntry, deletePasswordEntry,
+	replaceAllPasswords, runPasswordBackup, restorePasswordBackup,
+	getFileUrl, downloadTelegramFile,
+	handleImportFile,
+	buildMailConfigText, buildMailConfigKeyboard,
 	buildMergedSenderList, buildMgmtText, buildMgmtKeyboard,
 	MGMT_PAGE_SIZE,
 } from '../src';
@@ -1370,11 +1377,11 @@ describe('buildPwdListKeyboard', () => {
 	it('creates buttons for each item with add button on page 0', () => {
 		const list = [{ name: 'github', ts: 1 }, { name: 'aws', ts: 2 }];
 		const kb = buildPwdListKeyboard(list, 0);
-		expect(kb.inline_keyboard.length).toBe(3); // 2 items + bottom row
+		expect(kb.inline_keyboard.length).toBe(3); // 2 items + action row
 		expect(kb.inline_keyboard[0][0].text).toBe('github');
 		expect(kb.inline_keyboard[0][0].callback_data).toBe('pv:github');
-		const bottomRow = kb.inline_keyboard[2];
-		expect(bottomRow.some(b => b.callback_data === 'pa')).toBe(true);
+		const actionRow = kb.inline_keyboard[2];
+		expect(actionRow.some(b => b.callback_data === 'pa')).toBe(true);
 	});
 	it('paginates correctly with add button on first page', () => {
 		const list = Array.from({ length: 20 }, (_, i) => ({ name: `s${i}`, ts: i }));
@@ -1987,38 +1994,14 @@ describe('get* functions with _sysConfig', () => {
 	});
 });
 
-describe('buildConfigText', () => {
-	it('shows all config items with default values', () => {
+describe('buildConfigText (main page summary)', () => {
+	it('shows summary with password limit', () => {
 		const env = { _sysConfig: {} };
 		const text = buildConfigText(env, null);
 		expect(text).toContain('⚙️');
 		expect(text).toContain('系统设置');
-		expect(text).toContain('邮件存储上限');
-		expect(text).toContain('300 MB');
-		expect(text).toContain('收藏存储上限');
-		expect(text).toContain('50 MB');
-		expect(text).toContain('邮件保留天数');
-		expect(text).toContain('60 天');
-		expect(text).toContain('邮件最大条目');
-		expect(text).toContain('5000 条');
-		expect(text).toContain('高频阈值');
-		expect(text).toContain('10 封');
-		expect(text).toContain('高频窗口');
-		expect(text).toContain('5 分钟');
-		expect(text).toContain('附件上限');
-		expect(text).toContain('5 MB');
-		expect(text).toContain('正文截断');
-		expect(text).toContain('1500 字符');
-		expect(text).toContain('追踪像素');
-		expect(text).toContain('2 KB');
-		expect(text).toContain('密码条数上限');
+		expect(text).toContain('密码上限');
 		expect(text).toContain('不限');
-	});
-	it('shows modified values from KV config', () => {
-		const env = { _sysConfig: { maxStorageMB: 500, emlTtlDays: 30 } };
-		const text = buildConfigText(env, null);
-		expect(text).toContain('500 MB');
-		expect(text).toContain('30 天');
 	});
 	it('shows storage info when provided', () => {
 		const env = { _sysConfig: {} };
@@ -2037,39 +2020,42 @@ describe('buildConfigText', () => {
 	});
 });
 
-describe('buildConfigKeyboard', () => {
-	it('has 5 rows of config buttons + restore + back', () => {
+describe('buildMailConfigText', () => {
+	it('shows all mail config items with default values', () => {
+		const env = { _sysConfig: {} };
+		const text = buildMailConfigText(env, null);
+		expect(text).toContain('📧');
+		expect(text).toContain('邮件设置');
+		expect(text).toContain('邮件存储上限');
+		expect(text).toContain('300 MB');
+		expect(text).toContain('收藏存储上限');
+		expect(text).toContain('50 MB');
+		expect(text).toContain('邮件保留天数');
+		expect(text).toContain('60 天');
+	});
+	it('does not include maxPasswords', () => {
+		const env = { _sysConfig: {} };
+		const text = buildMailConfigText(env, null);
+		expect(text).not.toContain('密码条数上限');
+	});
+	it('shows modified values from KV config', () => {
+		const env = { _sysConfig: { maxStorageMB: 500, emlTtlDays: 30 } };
+		const text = buildMailConfigText(env, null);
+		expect(text).toContain('500 MB');
+		expect(text).toContain('30 天');
+	});
+});
+
+describe('buildConfigKeyboard (main page)', () => {
+	it('has 2 rows: mail+pwd, back', () => {
 		const kb = buildConfigKeyboard();
 		const rows = kb.inline_keyboard;
-		// 10 items in pairs → 5 rows, + restore row + back row = 7 rows
-		expect(rows.length).toBe(7);
-	});
-	it('each config button has cfg_e: prefix', () => {
-		const kb = buildConfigKeyboard();
-		const configBtns = kb.inline_keyboard.slice(0, 5).flat();
-		for (const btn of configBtns) {
-			expect(btn.callback_data).toMatch(/^cfg_e:/);
-		}
-		expect(configBtns.length).toBe(10);
-	});
-	it('has restore default button', () => {
-		const kb = buildConfigKeyboard();
-		const allData = kb.inline_keyboard.flat().map(b => b.callback_data);
-		expect(allData).toContain('cfg_rst');
+		expect(rows.length).toBe(2);
 	});
 	it('has back button', () => {
 		const kb = buildConfigKeyboard();
 		const allData = kb.inline_keyboard.flat().map(b => b.callback_data);
 		expect(allData).toContain('back');
-	});
-	it('buttons reference valid config keys', () => {
-		const kb = buildConfigKeyboard();
-		const validKeys = CONFIG_ITEMS.map(c => c.key);
-		const configBtns = kb.inline_keyboard.slice(0, 5).flat();
-		for (const btn of configBtns) {
-			const key = btn.callback_data.replace('cfg_e:', '');
-			expect(validKeys).toContain(key);
-		}
 	});
 });
 
@@ -2083,5 +2069,261 @@ describe('buildListKeyboard does not include config button', () => {
 		const kb = buildListKeyboard(['test'], [], false, 0);
 		const allData = kb.inline_keyboard.flat().map(b => b.callback_data);
 		expect(allData).not.toContain('cfg');
+	});
+});
+
+// ============ PBKDF2 加密/解密测试 ============
+
+describe('encryptWithPassword / decryptWithPassword', () => {
+	it('roundtrip encryption with password', async () => {
+		const password = 'test-password-123';
+		const plaintext = '{"entries":[{"name":"github","password":"secret"}]}';
+		const encrypted = await encryptWithPassword(password, plaintext);
+		expect(encrypted).toHaveProperty('salt');
+		expect(encrypted).toHaveProperty('iv');
+		expect(encrypted).toHaveProperty('data');
+		const decrypted = await decryptWithPassword(password, encrypted);
+		expect(decrypted).toBe(plaintext);
+	});
+
+	it('fails with wrong password', async () => {
+		const encrypted = await encryptWithPassword('correct-password', 'secret data');
+		await expect(decryptWithPassword('wrong-password', encrypted)).rejects.toThrow();
+	});
+
+	it('deriveKeyFromPassword produces a CryptoKey', async () => {
+		const salt = crypto.getRandomValues(new Uint8Array(16));
+		const key = await deriveKeyFromPassword('test', salt);
+		expect(key).toBeDefined();
+		expect(key.type).toBe('secret');
+	});
+});
+
+// ============ 导出格式测试 ============
+
+describe('export format', () => {
+	it('plain export has correct structure', async () => {
+		const entries = [
+			{ name: 'github', username: 'user', password: 'pass', note: '', totp: '' },
+		];
+		const exportData = { version: 1, mode: 'plain', exportedAt: Date.now(), count: entries.length, entries };
+		expect(exportData.version).toBe(1);
+		expect(exportData.mode).toBe('plain');
+		expect(exportData.entries).toHaveLength(1);
+		expect(exportData.entries[0].name).toBe('github');
+	});
+
+	it('auto encrypted export has correct structure', async () => {
+		const entries = [{ name: 'test', username: 'u', password: 'p', note: '', totp: '' }];
+		const encrypted = await encryptData(env, JSON.stringify(entries));
+		const exportData = { version: 1, mode: 'auto', exportedAt: Date.now(), count: entries.length, iv: encrypted.iv, data: encrypted.data };
+		expect(exportData.version).toBe(1);
+		expect(exportData.mode).toBe('auto');
+		expect(exportData.iv).toBeDefined();
+		expect(exportData.data).toBeDefined();
+		// verify roundtrip
+		const decrypted = await decryptData(env, { iv: exportData.iv, data: exportData.data });
+		const parsed = JSON.parse(decrypted);
+		expect(parsed).toHaveLength(1);
+		expect(parsed[0].name).toBe('test');
+	});
+
+	it('password encrypted export has correct structure', async () => {
+		const entries = [{ name: 'test', username: 'u', password: 'p', note: '', totp: '' }];
+		const encrypted = await encryptWithPassword('mypass', JSON.stringify(entries));
+		const exportData = { version: 1, mode: 'password', exportedAt: Date.now(), count: entries.length, salt: encrypted.salt, iv: encrypted.iv, data: encrypted.data };
+		expect(exportData.salt).toBeDefined();
+		expect(exportData.iv).toBeDefined();
+		expect(exportData.data).toBeDefined();
+		// verify roundtrip
+		const decrypted = await decryptWithPassword('mypass', { salt: exportData.salt, iv: exportData.iv, data: exportData.data });
+		expect(JSON.parse(decrypted)).toHaveLength(1);
+	});
+});
+
+// ============ buildPwdListKeyboard 无导出/导入/备份按钮 ============
+
+describe('buildPwdListKeyboard has no export/import/backup buttons', () => {
+	it('no export/import/backup on any page', () => {
+		const list = [{ name: 'test', ts: 1 }];
+		const kb = buildPwdListKeyboard(list, 0);
+		const btns = kb.inline_keyboard.flat();
+		expect(btns.some(b => b.callback_data === 'pex')).toBe(false);
+		expect(btns.some(b => b.callback_data === 'pim')).toBe(false);
+		expect(btns.some(b => b.callback_data === 'pbk')).toBe(false);
+	});
+});
+
+// ============ config 主页键盘测试 ============
+
+describe('buildConfigKeyboard has mail and pwd submenus', () => {
+	it('has mail settings and pwd settings buttons', () => {
+		const kb = buildConfigKeyboard();
+		const btns = kb.inline_keyboard.flat();
+		expect(btns.some(b => b.callback_data === 'cfg_mail')).toBe(true);
+		expect(btns.some(b => b.callback_data === 'cfg_pwd')).toBe(true);
+	});
+
+	it('does not have old config item buttons on main page', () => {
+		const kb = buildConfigKeyboard();
+		const btns = kb.inline_keyboard.flat();
+		// mail config items should NOT be on main page
+		expect(btns.some(b => b.callback_data === 'cfg_e:maxStorageMB')).toBe(false);
+		expect(btns.some(b => b.callback_data === 'cfg_rst')).toBe(false);
+	});
+});
+
+// ============ 邮件设置二级菜单测试 ============
+
+describe('buildMailConfigKeyboard', () => {
+	it('has mail config items but not maxPasswords', () => {
+		const kb = buildMailConfigKeyboard();
+		const btns = kb.inline_keyboard.flat();
+		expect(btns.some(b => b.callback_data === 'cfg_e:maxStorageMB')).toBe(true);
+		expect(btns.some(b => b.callback_data === 'cfg_e:emlTtlDays')).toBe(true);
+		expect(btns.some(b => b.callback_data === 'cfg_e:maxPasswords')).toBe(false);
+	});
+
+	it('has restore default and back to settings', () => {
+		const kb = buildMailConfigKeyboard();
+		const btns = kb.inline_keyboard.flat();
+		expect(btns.some(b => b.callback_data === 'cfg_rst')).toBe(true);
+		expect(btns.some(b => b.callback_data === 'cfg')).toBe(true);
+	});
+
+	it('has 9 mail config items', () => {
+		const kb = buildMailConfigKeyboard();
+		const configBtns = kb.inline_keyboard.flat().filter(b => b.callback_data.startsWith('cfg_e:'));
+		expect(configBtns.length).toBe(9);
+	});
+});
+
+// ============ 密码备份/恢复测试 ============
+
+describe('password backup and restore', () => {
+	it('runPasswordBackup creates backup with correct structure', async () => {
+		// Setup: create test password entries
+		await setPasswordList(env, [{ name: 'test1', ts: 1 }, { name: 'test2', ts: 2 }]);
+		await setPasswordEntry(env, 'test1', { username: 'u1', password: 'p1', note: '', totp: '' });
+		await setPasswordEntry(env, 'test2', { username: 'u2', password: 'p2', note: 'n2', totp: '' });
+
+		const result = await runPasswordBackup(env);
+		expect(result.ok).toBe(true);
+		expect(result.count).toBe(2);
+		expect(result.date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+
+		// Verify backup data in KV
+		const backupRaw = await env.KV.get(`pwd_backup:${result.date}`);
+		expect(backupRaw).toBeTruthy();
+		const backup = JSON.parse(backupRaw);
+		expect(backup.pwd_list).toHaveLength(2);
+		expect(Object.keys(backup.entries)).toHaveLength(2);
+
+		// Verify index
+		const index = await getBackupIndex(env);
+		expect(index.some(i => i.date === result.date)).toBe(true);
+
+		// Cleanup
+		await setPasswordList(env, []);
+		await deletePasswordEntry(env, 'test1');
+		await deletePasswordEntry(env, 'test2');
+		await env.KV.delete(`pwd_backup:${result.date}`);
+		await setBackupIndex(env, []);
+	});
+
+	it('runPasswordBackup returns count 0 for empty list', async () => {
+		await setPasswordList(env, []);
+		const result = await runPasswordBackup(env);
+		expect(result.ok).toBe(true);
+		expect(result.count).toBe(0);
+	});
+
+	it('restorePasswordBackup restores data correctly', async () => {
+		// Create backup manually
+		const list = [{ name: 'restored1', ts: 100 }];
+		await setPasswordEntry(env, 'restored1', { username: 'ru', password: 'rp', note: '', totp: '' });
+		const encRaw = await env.KV.get('pwd:restored1');
+		const backup = { pwd_list: list, entries: { restored1: encRaw } };
+		await env.KV.put('pwd_backup:2026-01-01', JSON.stringify(backup));
+
+		// Add current data that should be replaced
+		await setPasswordList(env, [{ name: 'current', ts: 200 }]);
+		await setPasswordEntry(env, 'current', { username: 'cu', password: 'cp', note: '', totp: '' });
+
+		const result = await restorePasswordBackup(env, '2026-01-01');
+		expect(result.ok).toBe(true);
+		expect(result.count).toBe(1);
+
+		// Verify restored data
+		const newList = await getPasswordList(env);
+		expect(newList).toHaveLength(1);
+		expect(newList[0].name).toBe('restored1');
+
+		// Verify old data is gone
+		const oldEntry = await getPasswordEntry(env, 'current');
+		expect(oldEntry).toBeNull();
+
+		// Cleanup
+		await setPasswordList(env, []);
+		await deletePasswordEntry(env, 'restored1');
+		await env.KV.delete('pwd_backup:2026-01-01');
+	});
+
+	it('restorePasswordBackup fails for non-existent backup', async () => {
+		const result = await restorePasswordBackup(env, '1999-01-01');
+		expect(result.ok).toBe(false);
+		expect(result.error).toContain('不存在');
+	});
+});
+
+// ============ replaceAllPasswords 测试 ============
+
+describe('replaceAllPasswords', () => {
+	it('replaces all passwords with new entries', async () => {
+		// Setup old data
+		await setPasswordList(env, [{ name: 'old1', ts: 1 }]);
+		await setPasswordEntry(env, 'old1', { username: 'ou', password: 'op', note: '', totp: '' });
+
+		// Replace with new data
+		const newEntries = [
+			{ name: 'new1', username: 'nu1', password: 'np1', note: '', totp: '' },
+			{ name: 'new2', username: 'nu2', password: 'np2', note: 'note', totp: '' },
+		];
+		await replaceAllPasswords(env, newEntries);
+
+		// Verify
+		const list = await getPasswordList(env);
+		expect(list).toHaveLength(2);
+		const entry1 = await getPasswordEntry(env, 'new1');
+		expect(entry1.username).toBe('nu1');
+		const oldEntry = await getPasswordEntry(env, 'old1');
+		expect(oldEntry).toBeNull();
+
+		// Cleanup
+		await setPasswordList(env, []);
+		await deletePasswordEntry(env, 'new1');
+		await deletePasswordEntry(env, 'new2');
+	});
+});
+
+// ============ 备份索引测试 ============
+
+describe('backup index management', () => {
+	it('getBackupIndex returns empty array when no index exists', async () => {
+		await env.KV.delete('pwd_backup_index');
+		const index = await getBackupIndex(env);
+		expect(index).toEqual([]);
+	});
+
+	it('setBackupIndex and getBackupIndex roundtrip', async () => {
+		const index = [{ date: '2026-02-10', count: 15 }, { date: '2026-02-09', count: 14 }];
+		await setBackupIndex(env, index);
+		const result = await getBackupIndex(env);
+		expect(result).toEqual(index);
+		await env.KV.delete('pwd_backup_index');
+	});
+
+	it('BACKUP_TTL is 31 days', () => {
+		expect(BACKUP_TTL).toBe(2678400);
 	});
 });
