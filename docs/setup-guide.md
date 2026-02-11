@@ -120,13 +120,13 @@ npx wrangler login
 KV 是存储所有数据（邮件、密码、配置）的地方。
 
 ```bash
-npx wrangler kv namespace create MAIL_CONFIG
+npx wrangler kv namespace create KV
 ```
 
 输出类似：
 
 ```
-🌀 Creating namespace with title "cftg-edc-MAIL_CONFIG"
+🌀 Creating namespace with title "cftg-edc-KV"
 ✨ Success!
 Add the following to your configuration file in your kv_namespaces array:
 { binding = "KV", id = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" }
