@@ -1379,11 +1379,12 @@ describe('buildPwdListKeyboard', () => {
 	it('paginates correctly with add button on first page', () => {
 		const list = Array.from({ length: 20 }, (_, i) => ({ name: `s${i}`, ts: i }));
 		const kb = buildPwdListKeyboard(list, 0);
-		// 8 items + 1 bottom row (add + nav)
-		expect(kb.inline_keyboard.length).toBe(PWD_PAGE_SIZE + 1);
-		const bottomRow = kb.inline_keyboard[PWD_PAGE_SIZE];
-		expect(bottomRow.some(b => b.callback_data === 'pa')).toBe(true);
-		expect(bottomRow.some(b => b.callback_data === 'pp:1')).toBe(true);
+		// 8 items + action row + nav row
+		expect(kb.inline_keyboard.length).toBe(PWD_PAGE_SIZE + 2);
+		const actionRow = kb.inline_keyboard[PWD_PAGE_SIZE];
+		expect(actionRow.some(b => b.callback_data === 'pa')).toBe(true);
+		const navRow = kb.inline_keyboard[PWD_PAGE_SIZE + 1];
+		expect(navRow.some(b => b.callback_data === 'pp:1')).toBe(true);
 	});
 	it('no add button on page 1', () => {
 		const list = Array.from({ length: 20 }, (_, i) => ({ name: `s${i}`, ts: i }));
@@ -1817,24 +1818,24 @@ describe('buildTrashDetailKeyboard', () => {
 });
 
 describe('buildPwdListKeyboard with trash', () => {
-	it('shows trash button on last page when trashCount > 0', () => {
+	it('shows trash count on first page when trashCount > 0', () => {
 		const list = [{ name: 'test', ts: 1 }];
 		const kb = buildPwdListKeyboard(list, 0, 3);
 		const btns = kb.inline_keyboard.flat();
 		expect(btns.some(b => b.callback_data === 'ptl' && b.text.includes('3'))).toBe(true);
 	});
-	it('hides trash button when trashCount is 0', () => {
+	it('always shows trash button even when trashCount is 0', () => {
 		const list = [{ name: 'test', ts: 1 }];
 		const kb = buildPwdListKeyboard(list, 0, 0);
 		const btns = kb.inline_keyboard.flat();
-		expect(btns.some(b => b.callback_data === 'ptl')).toBe(false);
+		expect(btns.some(b => b.callback_data === 'ptl' && b.text.includes('回收站'))).toBe(true);
 	});
-	it('only shows trash button on last page of multi-page', () => {
+	it('trash button on first page only in multi-page', () => {
 		const list = Array.from({ length: 20 }, (_, i) => ({ name: `s${i}`, ts: i }));
 		const kb0 = buildPwdListKeyboard(list, 0, 2);
-		const kb2 = buildPwdListKeyboard(list, 2, 2);
-		expect(kb0.inline_keyboard.flat().some(b => b.callback_data === 'ptl')).toBe(false);
-		expect(kb2.inline_keyboard.flat().some(b => b.callback_data === 'ptl')).toBe(true);
+		const kb1 = buildPwdListKeyboard(list, 1, 2);
+		expect(kb0.inline_keyboard.flat().some(b => b.callback_data === 'ptl')).toBe(true);
+		expect(kb1.inline_keyboard.flat().some(b => b.callback_data === 'ptl')).toBe(false);
 	});
 });
 

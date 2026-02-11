@@ -406,22 +406,24 @@ describe('密码模块边界条件', () => {
 		expect(text).toContain('&amp;&lt;&gt;');
 	});
 
-	it('buildPwdListKeyboard 空列表', () => {
+	it('buildPwdListKeyboard 空列表仍有新建和回收站按钮', () => {
 		const kb = buildPwdListKeyboard([], 0, 0);
 		const rows = kb.inline_keyboard;
-		// 只有 "➕ 新建" 按钮
 		expect(rows.length).toBe(1);
 		expect(rows[0][0].text).toContain('新建');
+		expect(rows[0][1].text).toContain('回收站');
 	});
 
-	it('buildPwdListKeyboard 第一页有新建按钮，其他页没有', () => {
+	it('buildPwdListKeyboard 第一页有新建和回收站，其他页没有', () => {
 		const list = Array.from({ length: 20 }, (_, i) => ({ name: `pwd${i}`, ts: i }));
 		const kb0 = buildPwdListKeyboard(list, 0, 0);
 		const kb1 = buildPwdListKeyboard(list, 1, 0);
-		const bottomBtns0 = kb0.inline_keyboard[kb0.inline_keyboard.length - 1];
-		const bottomBtns1 = kb1.inline_keyboard[kb1.inline_keyboard.length - 1];
-		expect(bottomBtns0.some(b => b.text.includes('新建'))).toBe(true);
-		expect(bottomBtns1.some(b => b.text.includes('新建'))).toBe(false);
+		const allBtns0 = kb0.inline_keyboard.flat();
+		const allBtns1 = kb1.inline_keyboard.flat();
+		expect(allBtns0.some(b => b.text.includes('新建'))).toBe(true);
+		expect(allBtns0.some(b => b.text.includes('回收站'))).toBe(true);
+		expect(allBtns1.some(b => b.text.includes('新建'))).toBe(false);
+		expect(allBtns1.some(b => b.text.includes('回收站'))).toBe(false);
 	});
 });
 

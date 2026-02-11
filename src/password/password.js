@@ -34,25 +34,25 @@ export function buildPwdListText(list, page) {
 export function buildPwdListKeyboard(list, page, trashCount) {
   const rows = [];
   const totalPages = Math.ceil(list.length / PWD_PAGE_SIZE) || 1;
-  const isLastPage = page >= totalPages - 1;
   const start = page * PWD_PAGE_SIZE;
   const pageItems = list.slice(start, start + PWD_PAGE_SIZE);
   for (const item of pageItems) {
     rows.push([{ text: item.name, callback_data: cbData('pv:', item.name) }]);
   }
-  const bottomRow = [];
   if (page === 0) {
-    bottomRow.push({ text: '➕ 新建', callback_data: 'pa' });
+    const actionRow = [{ text: '➕ 新建', callback_data: 'pa' }];
+    actionRow.push(trashCount > 0
+      ? { text: `🗑 回收站 (${trashCount})`, callback_data: 'ptl' }
+      : { text: '🗑 回收站', callback_data: 'ptl' });
+    rows.push(actionRow);
   }
   if (totalPages > 1) {
-    if (page > 0) bottomRow.push({ text: '◀️', callback_data: `pp:${page - 1}` });
-    bottomRow.push({ text: `${page + 1}/${totalPages}`, callback_data: 'noop' });
-    if (page < totalPages - 1) bottomRow.push({ text: '▶️', callback_data: `pp:${page + 1}` });
+    const navRow = [];
+    if (page > 0) navRow.push({ text: '◀️', callback_data: `pp:${page - 1}` });
+    navRow.push({ text: `${page + 1}/${totalPages}`, callback_data: 'noop' });
+    if (page < totalPages - 1) navRow.push({ text: '▶️', callback_data: `pp:${page + 1}` });
+    rows.push(navRow);
   }
-  if (isLastPage && trashCount > 0) {
-    bottomRow.push({ text: `🗑 (${trashCount})`, callback_data: 'ptl' });
-  }
-  if (bottomRow.length) rows.push(bottomRow);
   return { inline_keyboard: rows };
 }
 
