@@ -13,6 +13,7 @@ import {
   encryptData, decryptData, encryptWithPassword, decryptWithPassword,
 } from '../shared/crypto.js';
 import { formatSize } from '../shared/utils.js';
+import { t, getLang, setLang } from '../i18n.js';
 
 // ============ 配置项分类 ============
 
@@ -21,21 +22,22 @@ const MAIL_CONFIG_KEYS = CONFIG_ITEMS.filter(c => c.key !== 'maxPasswords').map(
 // ============ 主页 UI ============
 
 export function buildConfigText(env, storageInfo) {
-  let text = '⚙️ <b>系统设置</b>\n';
+  let text = t('cfg.title') + '\n';
   if (storageInfo) {
-    text += `\n💾 邮件：${formatSize(storageInfo.used)} / ${formatSize(storageInfo.total)}`;
-    text += `\n⭐ 收藏：${formatSize(storageInfo.starUsed)} / ${formatSize(storageInfo.starTotal)}`;
+    text += '\n' + t('cfg.mail', { used: formatSize(storageInfo.used), total: formatSize(storageInfo.total) });
+    text += '\n' + t('cfg.star', { used: formatSize(storageInfo.starUsed), total: formatSize(storageInfo.starTotal) });
   }
   const pwdVal = getEffectiveValue(env, 'maxPasswords');
-  text += `\n🔐 密码上限：${pwdVal === 0 ? '不限' : `${pwdVal} 条`}`;
+  text += '\n' + t('cfg.pwdLimit', { v: pwdVal === 0 ? t('cfg.unlimited') : t('cfg.count', { n: pwdVal }) });
   return text;
 }
 
 export function buildConfigKeyboard() {
   return {
     inline_keyboard: [
-      [{ text: '📧 邮件设置', callback_data: 'cfg_mail' }, { text: '🔐 密码设置', callback_data: 'cfg_pwd' }],
-      [{ text: '◀️ 返回', callback_data: 'back' }],
+      [{ text: t('cfg.btnMail'), callback_data: 'cfg_mail' }, { text: t('cfg.btnPwd'), callback_data: 'cfg_pwd' }],
+      [{ text: t('cfg.btnLang'), callback_data: 'cfg_lang' }],
+      [{ text: t('btn.back'), callback_data: 'back' }],
     ],
   };
 }
@@ -45,9 +47,9 @@ export function buildConfigKeyboard() {
 export function buildPwdConfigKeyboard() {
   return {
     inline_keyboard: [
-      [{ text: '🔐 密码上限', callback_data: 'cfg_e:maxPasswords' }],
-      [{ text: '📤 导出', callback_data: 'cfg_ex' }, { text: '📥 导入', callback_data: 'cfg_im' }, { text: '💾 备份', callback_data: 'cfg_bk' }],
-      [{ text: '◀️ 返回设置', callback_data: 'cfg' }],
+      [{ text: t('cfg.pwd.btnLimit'), callback_data: 'cfg_e:maxPasswords' }],
+      [{ text: t('cfg.pwd.btnExport'), callback_data: 'cfg_ex' }, { text: t('cfg.pwd.btnImport'), callback_data: 'cfg_im' }, { text: t('cfg.pwd.btnBackup'), callback_data: 'cfg_bk' }],
+      [{ text: t('cfg.pwd.btnBackCfg'), callback_data: 'cfg' }],
     ],
   };
 }
@@ -55,17 +57,18 @@ export function buildPwdConfigKeyboard() {
 // ============ 邮件设置二级菜单 ============
 
 export function buildMailConfigText(env, storageInfo) {
-  let text = '📧 <b>邮件设置</b>\n\n';
+  let text = t('cfg.mail.title');
   for (const item of CONFIG_ITEMS) {
     if (item.key === 'maxPasswords') continue;
     const val = getEffectiveValue(env, item.key);
-    text += `${item.label}：${val} ${item.unit}`;
-    if (item.desc) text += `（${item.desc}）`;
+    const unitStr = t(item.unit);
+    text += `${t(item.label)}：${val} ${unitStr}`;
+    if (item.desc) text += `（${t(item.desc)}）`;
     text += '\n';
   }
   if (storageInfo) {
-    text += `\n💾 邮件：${formatSize(storageInfo.used)} / ${formatSize(storageInfo.total)}`;
-    text += `\n⭐ 收藏：${formatSize(storageInfo.starUsed)} / ${formatSize(storageInfo.starTotal)}`;
+    text += '\n' + t('cfg.mail', { used: formatSize(storageInfo.used), total: formatSize(storageInfo.total) });
+    text += '\n' + t('cfg.star', { used: formatSize(storageInfo.starUsed), total: formatSize(storageInfo.starTotal) });
   }
   return text;
 }
@@ -74,14 +77,14 @@ export function buildMailConfigKeyboard() {
   const mailItems = CONFIG_ITEMS.filter(c => c.key !== 'maxPasswords');
   const rows = [];
   for (let i = 0; i < mailItems.length; i += 2) {
-    const row = [{ text: mailItems[i].label, callback_data: `cfg_e:${mailItems[i].key}` }];
+    const row = [{ text: t(mailItems[i].label), callback_data: `cfg_e:${mailItems[i].key}` }];
     if (i + 1 < mailItems.length) {
-      row.push({ text: mailItems[i + 1].label, callback_data: `cfg_e:${mailItems[i + 1].key}` });
+      row.push({ text: t(mailItems[i + 1].label), callback_data: `cfg_e:${mailItems[i + 1].key}` });
     }
     rows.push(row);
   }
-  rows.push([{ text: '🔄 恢复默认', callback_data: 'cfg_rst' }]);
-  rows.push([{ text: '◀️ 返回设置', callback_data: 'cfg' }]);
+  rows.push([{ text: t('cfg.mail.btnReset'), callback_data: 'cfg_rst' }]);
+  rows.push([{ text: t('cfg.mail.btnBackCfg'), callback_data: 'cfg' }]);
   return { inline_keyboard: rows };
 }
 
@@ -133,7 +136,7 @@ async function editToMailConfig(env, msgId) {
 async function editToPwdConfig(env, msgId) {
   await loadSystemConfig(env);
   const pwdVal = getEffectiveValue(env, 'maxPasswords');
-  const text = `🔐 <b>密码设置</b>\n\n密码上限：${pwdVal === 0 ? '不限' : `${pwdVal} 条`}`;
+  const text = t('cfg.pwd.title') + '\n\n' + t('cfg.pwd.limit', { v: pwdVal === 0 ? t('cfg.unlimited') : t('cfg.count', { n: pwdVal }) });
   return editMessageText(env, msgId, text, buildPwdConfigKeyboard());
 }
 
@@ -151,13 +154,13 @@ async function exportPasswords(env, msgId, mode, userPassword) {
   try {
     const list = await getPasswordList(env);
     if (list.length === 0) {
-      const text = '❌ 密码列表为空，无法导出';
+      const text = t('cfg.export.empty');
       if (msgId) await editMessageText(env, msgId, text);
       else await sendTelegramMessage(env, text);
       return;
     }
 
-    if (msgId) await editMessageText(env, msgId, '📤 正在导出…');
+    if (msgId) await editMessageText(env, msgId, t('cfg.export.exporting'));
 
     const entries = [];
     for (const item of list) {
@@ -185,13 +188,13 @@ async function exportPasswords(env, msgId, mode, userPassword) {
     const blob = new Blob([json], { type: 'application/json' });
     await sendTelegramDocument(env, blob, `passwords_${dateStr}.json`);
 
-    const modeLabel = { plain: '明文', auto: '自动加密', password: '密码加密' }[mode];
-    const text = `✅ 已导出 ${entries.length} 条密码（${modeLabel}）`;
+    const modeLabel = { plain: t('cfg.export.modePlain'), auto: t('cfg.export.modeAuto'), password: t('cfg.export.modePassword') }[mode];
+    const text = t('cfg.export.done', { n: entries.length, mode: modeLabel });
     if (msgId) await editMessageText(env, msgId, text);
     else await sendTelegramMessage(env, text);
   } catch (err) {
     console.error('Export error:', err);
-    const text = `❌ 导出失败: ${err.message}`;
+    const text = t('cfg.export.failed', { err: err.message });
     if (msgId) await editMessageText(env, msgId, text);
     else await sendTelegramMessage(env, text);
   }
@@ -205,16 +208,16 @@ export async function handleImportFile(msg, env) {
     const fileId = msg.document.file_id;
     const content = await downloadTelegramFile(env, fileId);
     if (!content) {
-      await sendTelegramMessage(env, '❌ 无法下载文件');
+      await sendTelegramMessage(env, t('cfg.import.cantDownload'));
       return;
     }
 
     let parsed;
     try { parsed = JSON.parse(content); }
-    catch { await sendTelegramMessage(env, '❌ 文件格式错误，请发送有效的 JSON 文件'); return; }
+    catch { await sendTelegramMessage(env, t('cfg.import.invalidJson')); return; }
 
     if (parsed.version !== 1) {
-      await sendTelegramMessage(env, '❌ 不支持的备份版本');
+      await sendTelegramMessage(env, t('cfg.import.unsupportedVersion'));
       return;
     }
 
@@ -226,17 +229,17 @@ export async function handleImportFile(msg, env) {
         const entries = JSON.parse(decrypted);
         await previewImport(env, entries, parsed.exportedAt);
       } catch {
-        await sendTelegramMessage(env, '❌ 解密失败，可能 PWD_KEY 不匹配');
+        await sendTelegramMessage(env, t('cfg.import.decryptFailed'));
       }
     } else if (parsed.mode === 'password') {
       await env.KV.put('pwd_import_encrypted', JSON.stringify({ iv: parsed.iv, data: parsed.data, salt: parsed.salt, exportedAt: parsed.exportedAt, count: parsed.count }), { expirationTtl: 300 });
-      await sendTelegramPrompt(env, '🔑 请输入导入密码：');
+      await sendTelegramPrompt(env, t('cfg.import.promptPwd'));
     } else {
-      await sendTelegramMessage(env, '❌ 未知的加密模式');
+      await sendTelegramMessage(env, t('cfg.import.unknownMode'));
     }
   } catch (err) {
     console.error('Import file error:', err);
-    await sendTelegramMessage(env, `❌ 导入失败: ${err.message}`);
+    await sendTelegramMessage(env, t('cfg.import.failed', { err: err.message }));
   }
 }
 
@@ -244,7 +247,7 @@ async function decryptAndPreviewImport(env, password) {
   try {
     const raw = await env.KV.get('pwd_import_encrypted');
     if (!raw) {
-      await sendTelegramMessage(env, '❌ 导入数据已过期，请重新发送文件');
+      await sendTelegramMessage(env, t('cfg.import.expired'));
       return;
     }
     const encrypted = JSON.parse(raw);
@@ -254,24 +257,24 @@ async function decryptAndPreviewImport(env, password) {
       await env.KV.delete('pwd_import_encrypted');
       await previewImport(env, entries, encrypted.exportedAt);
     } catch {
-      await sendTelegramMessage(env, '❌ 密码错误，请重试');
-      await sendTelegramPrompt(env, '🔑 请输入导入密码：');
+      await sendTelegramMessage(env, t('cfg.import.wrongPwd'));
+      await sendTelegramPrompt(env, t('cfg.import.promptPwd'));
     }
   } catch (err) {
     console.error('Decrypt import error:', err);
-    await sendTelegramMessage(env, `❌ 解密失败: ${err.message}`);
+    await sendTelegramMessage(env, t('cfg.import.decryptErr', { err: err.message }));
   }
 }
 
 async function previewImport(env, entries, exportedAt) {
   await env.KV.put('pwd_import_pending', JSON.stringify(entries), { expirationTtl: 300 });
   const currentList = await getPasswordList(env);
-  const dateStr = exportedAt ? new Date(exportedAt).toISOString().replace('T', ' ').slice(0, 16) : '未知';
-  const text = `📥 导入预览\n\n备份时间：${dateStr}\n包含 ${entries.length} 条密码\n当前已有 ${currentList.length} 条密码\n\n⚠️ 确认后将完全替换现有数据`;
+  const dateStr = exportedAt ? new Date(exportedAt).toISOString().replace('T', ' ').slice(0, 16) : t('cfg.import.unknownDate');
+  const text = t('cfg.import.preview', { date: dateStr, n: entries.length, current: currentList.length });
   await sendTelegramMessage(env, text, null, {
     reply_markup: {
       inline_keyboard: [
-        [{ text: '✅ 确认替换', callback_data: 'cfg_ic' }, { text: '❌ 取消', callback_data: 'cfg_in' }],
+        [{ text: t('cfg.import.btnConfirm'), callback_data: 'cfg_ic' }, { text: t('cfg.import.btnCancel'), callback_data: 'cfg_in' }],
       ],
     },
   });
@@ -281,16 +284,16 @@ async function confirmImport(env, msgId) {
   try {
     const raw = await env.KV.get('pwd_import_pending');
     if (!raw) {
-      await editMessageText(env, msgId, '❌ 导入数据已过期，请重新发送文件');
+      await editMessageText(env, msgId, t('cfg.import.confirmExpired'));
       return;
     }
     const entries = JSON.parse(raw);
     await replaceAllPasswords(env, entries);
     await clearImportState(env);
-    await editMessageText(env, msgId, `✅ 已导入 ${entries.length} 条密码`);
+    await editMessageText(env, msgId, t('cfg.import.done', { n: entries.length }));
   } catch (err) {
     console.error('Confirm import error:', err);
-    await editMessageText(env, msgId, `❌ 导入失败: ${err.message}`);
+    await editMessageText(env, msgId, t('cfg.import.confirmFailed', { err: err.message }));
   }
 }
 
@@ -307,18 +310,18 @@ async function clearImportState(env) {
 async function showBackupList(env, msgId) {
   const index = await getBackupIndex(env);
   if (index.length === 0) {
-    await editMessageText(env, msgId, '💾 暂无备份\n\n备份由系统每日凌晨自动创建', {
-      inline_keyboard: [[{ text: '◀️ 返回', callback_data: 'cfg_pwd' }]],
+    await editMessageText(env, msgId, t('cfg.backup.empty'), {
+      inline_keyboard: [[{ text: t('btn.back'), callback_data: 'cfg_pwd' }]],
     });
     return;
   }
   const rows = [];
   for (const item of index.slice(0, 10)) {
     const d = item.date.slice(5); // MM-DD
-    rows.push([{ text: `${d} (${item.count}条)`, callback_data: `cfg_br:${item.date}` }]);
+    rows.push([{ text: t('cfg.backup.item', { date: d, n: item.count }), callback_data: `cfg_br:${item.date}` }]);
   }
-  rows.push([{ text: '◀️ 返回', callback_data: 'cfg_pwd' }]);
-  await editMessageText(env, msgId, '💾 密码备份', { inline_keyboard: rows });
+  rows.push([{ text: t('btn.back'), callback_data: 'cfg_pwd' }]);
+  await editMessageText(env, msgId, t('cfg.backup.title'), { inline_keyboard: rows });
 }
 
 // ============ handleConfigCallback ============
@@ -341,24 +344,24 @@ export async function handleConfigCallback(cbq, env) {
     if (item) {
       await loadSystemConfig(env);
       const current = getEffectiveValue(env, value);
-      const display = item.key === 'maxPasswords' && current === 0 ? '不限' : `${current}`;
-      let promptText = `⚙️ 设置${item.label}\n`;
-      if (item.desc) promptText += `${item.desc}\n`;
-      promptText += `\n当前值：${display} ${item.unit}\n有效范围：${item.min}-${item.max}${item.key === 'maxPasswords' ? '（0=不限）' : ''}`;
+      const display = item.key === 'maxPasswords' && current === 0 ? t('cfg.unlimited') : `${current}`;
+      let promptText = t('cfg.prompt.setValue', { label: t(item.label) });
+      if (item.desc) promptText += `${t(item.desc)}\n`;
+      promptText += t('cfg.prompt.currentValue', { v: display, unit: t(item.unit), min: item.min, max: item.max }) + (item.key === 'maxPasswords' ? t('cfg.prompt.unlimitedHint') : '');
       await sendTelegramPrompt(env, promptText);
     }
     await answerCallbackQuery(env, cbq.id);
     return;
   } else if (action === 'cfg_rst') {
-    toast = '⚠️ 再次点击确认恢复默认';
+    toast = t('cfg.toast.confirmReset');
     await loadSystemConfig(env);
     const storageInfo = await getStorageInfo(env);
     let text = buildMailConfigText(env, storageInfo);
-    text += '\n\n⚠️ 确认要恢复邮件设置为默认值吗？';
+    text += t('cfg.confirmReset');
     const kb = buildMailConfigKeyboard();
     kb.inline_keyboard[kb.inline_keyboard.length - 2] = [
-      { text: '⚠️ 确认恢复', callback_data: 'cfg_rsta' },
-      { text: '取消', callback_data: 'cfg_mail' },
+      { text: t('cfg.btnConfirmReset'), callback_data: 'cfg_rsta' },
+      { text: t('btn.cancel'), callback_data: 'cfg_mail' },
     ];
     await editMessageText(env, msgId, text, kb);
   } else if (action === 'cfg_rsta') {
@@ -366,15 +369,35 @@ export async function handleConfigCallback(cbq, env) {
     const config = env._sysConfig || {};
     for (const key of MAIL_CONFIG_KEYS) delete config[key];
     await setSystemConfig(env, config);
-    toast = '✅ 已恢复邮件设置为默认值';
+    toast = t('cfg.toast.resetDone');
     await editToMailConfig(env, msgId);
+  } else if (action === 'cfg_lang') {
+    await loadSystemConfig(env);
+    const config = env._sysConfig || {};
+    config.lang = getLang() === 'zh' ? 'en' : 'zh';
+    await setSystemConfig(env, config);
+    setLang(config.lang);
+    // 更新 bot 命令菜单语言
+    const commands = [
+      { command: 'list', description: t('cmd.list') },
+      { command: 'search', description: t('cmd.search') },
+      { command: 'pwd', description: t('cmd.pwd') },
+      { command: 'config', description: t('cmd.config') },
+    ];
+    await fetchWithRetry(
+      `https://api.telegram.org/bot${env.TG_BOT_TOKEN}/setMyCommands`,
+      { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ commands, scope: { type: 'chat', chat_id: env.TG_CHAT_ID } }) },
+      'setMyCommands',
+    );
+    await editToConfig(env, msgId);
   } else if (action === 'cfg_ex') {
-    await editMessageText(env, msgId, '📤 选择导出模式：', {
+    await editMessageText(env, msgId, t('cfg.export.title'), {
       inline_keyboard: [
-        [{ text: '📄 明文导出', callback_data: 'cfg_xp' }],
-        [{ text: '🔒 加密导出(自动)', callback_data: 'cfg_xa' }],
-        [{ text: '🔑 加密导出(密码)', callback_data: 'cfg_xk' }],
-        [{ text: '◀️ 返回', callback_data: 'cfg_pwd' }],
+        [{ text: t('cfg.export.plain'), callback_data: 'cfg_xp' }],
+        [{ text: t('cfg.export.auto'), callback_data: 'cfg_xa' }],
+        [{ text: t('cfg.export.password'), callback_data: 'cfg_xk' }],
+        [{ text: t('btn.back'), callback_data: 'cfg_pwd' }],
       ],
     });
   } else if (action === 'cfg_xp') {
@@ -382,29 +405,29 @@ export async function handleConfigCallback(cbq, env) {
   } else if (action === 'cfg_xa') {
     await exportPasswords(env, msgId, 'auto');
   } else if (action === 'cfg_xk') {
-    await editMessageText(env, msgId, '📤 正在准备加密导出…');
-    await sendTelegramPrompt(env, '🔑 请输入导出密码：');
+    await editMessageText(env, msgId, t('cfg.export.preparing'));
+    await sendTelegramPrompt(env, t('cfg.export.promptPwd'));
   } else if (action === 'cfg_im') {
     await env.KV.put('pwd_import_mode', 'waiting', { expirationTtl: 300 });
-    await editMessageText(env, msgId, '📥 请在5分钟内发送密码备份文件（.json）\n\n⚠️ 导入将完全替换现有所有密码数据');
+    await editMessageText(env, msgId, t('cfg.import.waiting'));
   } else if (action === 'cfg_ic') {
     await confirmImport(env, msgId);
   } else if (action === 'cfg_in') {
     await clearImportState(env);
-    toast = '已取消导入';
+    toast = t('cfg.import.cancelled');
     await editToPwdConfig(env, msgId);
   } else if (action === 'cfg_bk') {
     await showBackupList(env, msgId);
   } else if (action === 'cfg_br') {
-    await editMessageText(env, msgId, `⚠️ 确认要恢复 ${value} 的备份吗？\n\n这将完全替换现有所有密码数据`, {
+    await editMessageText(env, msgId, t('cfg.backup.confirmRestore', { date: value }), {
       inline_keyboard: [
-        [{ text: '✅ 确认恢复', callback_data: `cfg_brc:${value}` }, { text: '❌ 取消', callback_data: 'cfg_bk' }],
+        [{ text: t('cfg.backup.btnConfirmRestore'), callback_data: `cfg_brc:${value}` }, { text: t('cfg.backup.btnCancel'), callback_data: 'cfg_bk' }],
       ],
     });
   } else if (action === 'cfg_brc') {
     const result = await restorePasswordBackup(env, value);
     if (result.ok) {
-      toast = `✅ 已恢复 ${result.count} 条密码`;
+      toast = t('cfg.backup.restored', { n: result.count });
     } else {
       toast = `❌ ${result.error}`;
     }
@@ -418,41 +441,49 @@ export async function handleConfigCallback(cbq, env) {
 
 export async function handleConfigReply(msg, replyTo, text, env) {
   try {
-    if (replyTo.text.startsWith('🔑 请输入导出密码')) {
+    // 匹配导出/导入密码提示（用 🔑 前缀）
+    if (replyTo.text.startsWith('🔑')) {
+      const isExport = replyTo.text.includes(t('cfg.export.promptPwd').replace('🔑 ', '').split('：')[0].split(':')[0]);
       await deleteMessage(env, msg.message_id);
       await deleteMessage(env, replyTo.message_id);
-      await exportPasswords(env, null, 'password', text.trim());
-    } else if (replyTo.text.startsWith('🔑 请输入导入密码')) {
-      await deleteMessage(env, msg.message_id);
-      await deleteMessage(env, replyTo.message_id);
-      await decryptAndPreviewImport(env, text.trim());
+      if (isExport) {
+        await exportPasswords(env, null, 'password', text.trim());
+      } else {
+        await decryptAndPreviewImport(env, text.trim());
+      }
     } else {
-      const keyMatch = replyTo.text.match(/⚙️ 设置(.+)\n/);
-      if (keyMatch) {
-        const matchLabel = keyMatch[1];
-        const item = CONFIG_ITEMS.find(c => c.label === matchLabel);
-        if (item) {
-          const num = parseInt(text);
-          if (isNaN(num) || num < item.min || num > item.max) {
-            await sendTelegramMessage(env, `❌ 无效值，请输入 ${item.min}-${item.max} 的整数`);
+      // 匹配配置项设置提示（用 ⚙️ 前缀）
+      // 尝试匹配每个 CONFIG_ITEM 的 label
+      let matchedItem = null;
+      for (const item of CONFIG_ITEMS) {
+        const label = t(item.label);
+        if (replyTo.text.includes(label)) {
+          matchedItem = item;
+          break;
+        }
+      }
+      if (matchedItem) {
+        const num = parseInt(text);
+        if (isNaN(num) || num < matchedItem.min || num > matchedItem.max) {
+          await sendTelegramMessage(env, t('cfg.invalidValue', { min: matchedItem.min, max: matchedItem.max }));
+        } else {
+          await loadSystemConfig(env);
+          const config = env._sysConfig || {};
+          if (num === matchedItem.defaultVal) {
+            delete config[matchedItem.key];
           } else {
-            await loadSystemConfig(env);
-            const config = env._sysConfig || {};
-            if (num === item.defaultVal) {
-              delete config[item.key];
-            } else {
-              config[item.key] = num;
-            }
-            await setSystemConfig(env, config);
-            env._sysConfig = config;
-            const display = item.key === 'maxPasswords' && num === 0 ? '不限' : `${num} ${item.unit}`;
-            await sendTelegramMessage(env, `✅ ${item.label}已设为 ${display}`);
+            config[matchedItem.key] = num;
           }
+          await setSystemConfig(env, config);
+          env._sysConfig = config;
+          const unitStr = t(matchedItem.unit);
+          const display = matchedItem.key === 'maxPasswords' && num === 0 ? t('cfg.unlimited') : `${num} ${unitStr}`;
+          await sendTelegramMessage(env, t('cfg.valueSet', { label: t(matchedItem.label), v: display }));
         }
       }
     }
   } catch (err) {
     console.error('Config reply error:', err);
-    try { await sendTelegramMessage(env, `❌ 执行出错: ${err.message}`); } catch {}
+    try { await sendTelegramMessage(env, t('error.exec', { err: err.message })); } catch {}
   }
 }

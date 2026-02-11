@@ -1,5 +1,5 @@
 import { env, createExecutionContext, waitOnExecutionContext } from 'cloudflare:test';
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import worker, {
 	esc, formatAddress, formatAddressList, formatDate, formatSize,
 	htmlToText, classifyAttachment, buildAttachmentSummary, buildNotificationText,
@@ -37,7 +37,10 @@ import worker, {
 	buildMailConfigText, buildMailConfigKeyboard,
 	buildMergedSenderList, buildMgmtText, buildMgmtKeyboard,
 	MGMT_PAGE_SIZE,
+	setLang, getLang, t, zh, en,
 } from '../src';
+
+beforeEach(() => setLang('zh'));
 
 // ============ 工具函数测试 ============
 
@@ -2047,10 +2050,10 @@ describe('buildMailConfigText', () => {
 });
 
 describe('buildConfigKeyboard (main page)', () => {
-	it('has 2 rows: mail+pwd, back', () => {
+	it('has 3 rows: mail+pwd, lang, back', () => {
 		const kb = buildConfigKeyboard();
 		const rows = kb.inline_keyboard;
-		expect(rows.length).toBe(2);
+		expect(rows.length).toBe(3);
 	});
 	it('has back button', () => {
 		const kb = buildConfigKeyboard();
@@ -2325,5 +2328,45 @@ describe('backup index management', () => {
 
 	it('BACKUP_TTL is 31 days', () => {
 		expect(BACKUP_TTL).toBe(2678400);
+	});
+});
+
+// ============ i18n key parity 测试 ============
+
+describe('i18n key parity', () => {
+	it('zh and en have the same keys', () => {
+		const zhKeys = Object.keys(zh).sort();
+		const enKeys = Object.keys(en).sort();
+		expect(zhKeys).toEqual(enKeys);
+	});
+
+	it('t() returns key itself for missing key', () => {
+		expect(t('nonexistent.key.xyz')).toBe('nonexistent.key.xyz');
+	});
+
+	it('t() substitutes params', () => {
+		expect(t('email.att.photos', { n: 3 })).toBe('3 张图片');
+	});
+
+	it('setLang switches language', () => {
+		setLang('en');
+		expect(getLang()).toBe('en');
+		expect(t('btn.back')).toBe('◀️ Back');
+		setLang('zh');
+		expect(getLang()).toBe('zh');
+		expect(t('btn.back')).toBe('◀️ 返回');
+	});
+
+	it('all zh values are non-empty strings', () => {
+		for (const [key, val] of Object.entries(zh)) {
+			expect(typeof val).toBe('string');
+			expect(val.length, `zh key "${key}" is empty`).toBeGreaterThan(0);
+		}
+	});
+
+	it('all en values are strings', () => {
+		for (const [key, val] of Object.entries(en)) {
+			expect(typeof val, `en key "${key}" is not a string`).toBe('string');
+		}
 	});
 });

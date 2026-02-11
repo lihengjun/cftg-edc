@@ -1,5 +1,6 @@
 import PostalMime from 'postal-mime';
 import { esc, escAddr, formatAddress, formatAddressList, formatDate, formatSize, htmlToText, generateRandomPrefix } from '../shared/utils.js';
+import { t } from '../i18n.js';
 import {
   fetchWithRetry, sendTelegramMessage, sendTelegramPrompt,
   sendTelegramPhoto, sendTelegramDocument, sendTelegramMediaGroup,
@@ -95,37 +96,37 @@ export function buildAttachmentSummary(attachments, maxSize, trackingSize) {
     else if (cls.action === 'listOnly') oversized++;
   }
   const parts = [];
-  if (photos > 0) parts.push(`${photos} 张图片`);
-  if (docs > 0) parts.push(`${docs} 个文档`);
-  if (oversized > 0) parts.push(`${oversized} 个超大文件`);
-  return parts.length > 0 ? `附件: ${parts.join(', ')}` : '';
+  if (photos > 0) parts.push(t('email.att.photos', { n: photos }));
+  if (docs > 0) parts.push(t('email.att.docs', { n: docs }));
+  if (oversized > 0) parts.push(t('email.att.oversized', { n: oversized }));
+  return parts.length > 0 ? t('email.att.prefix') + parts.join(', ') : '';
 }
 
 // ============ 消息格式化 ============
 
 export function buildNotificationText(parsed, rawFrom, rawTo, bodyText, attachmentSummary, bodyMaxLen) {
-  let header = `📧 <b>新邮件</b>\n\n`;
-  header += `<b>发件人：</b>${escAddr(formatAddress(parsed.from) || rawFrom)}\n`;
-  header += `<b>收件人：</b>${escAddr(formatAddressList(parsed.to) || rawTo)}\n`;
+  let header = t('email.new');
+  header += `${t('email.from')}${escAddr(formatAddress(parsed.from) || rawFrom)}\n`;
+  header += `${t('email.to')}${escAddr(formatAddressList(parsed.to) || rawTo)}\n`;
 
   if (parsed.cc && parsed.cc.length > 0) {
-    header += `<b>抄送：</b>${escAddr(formatAddressList(parsed.cc))}\n`;
+    header += `${t('email.cc')}${escAddr(formatAddressList(parsed.cc))}\n`;
   }
   if (parsed.bcc && parsed.bcc.length > 0) {
-    header += `<b>密送：</b>${escAddr(formatAddressList(parsed.bcc))}\n`;
+    header += `${t('email.bcc')}${escAddr(formatAddressList(parsed.bcc))}\n`;
   }
   if (parsed.replyTo && parsed.replyTo.length > 0) {
     const replyToStr = formatAddressList(parsed.replyTo);
     const fromStr = formatAddress(parsed.from) || rawFrom;
     if (replyToStr !== fromStr) {
-      header += `<b>回复至：</b>${escAddr(replyToStr)}\n`;
+      header += `${t('email.replyTo')}${escAddr(replyToStr)}\n`;
     }
   }
   if (parsed.date) {
-    header += `<b>时间：</b>${esc(formatDate(parsed.date))}\n`;
+    header += `${t('email.time')}${esc(formatDate(parsed.date))}\n`;
   }
 
-  header += `<b>主题：</b>${esc(parsed.subject || '(无主题)')}\n`;
+  header += `${t('email.subject')}${esc(parsed.subject || t('email.noSubject'))}\n`;
 
   if (attachmentSummary) {
     header += `\n📎 ${esc(attachmentSummary)}\n`;
@@ -134,8 +135,8 @@ export function buildNotificationText(parsed, rawFrom, rawTo, bodyText, attachme
   header += `\n━━━━━━━━━━━━━━━━━━━━\n\n`;
 
   // 计算正文可用空间
-  const truncSuffix = '\n...(已截断)';
-  let body = bodyText || '(无正文)';
+  const truncSuffix = t('email.truncated');
+  let body = bodyText || t('email.noBody');
 
   // 先按可读性截断
   bodyMaxLen = bodyMaxLen || BODY_MAX_LENGTH;
@@ -167,7 +168,7 @@ export function buildNotificationText(parsed, rawFrom, rawTo, bodyText, attachme
 
 // 通用正文截断辅助：确保 header + escaped body 不超过 TG 限制
 function truncateBodyForTg(headerLen, body, maxLen) {
-  const truncSuffix = '\n...(已截断)';
+  const truncSuffix = t('email.truncated');
   if (body.length > maxLen) body = body.substring(0, maxLen) + truncSuffix;
   let escaped = esc(body);
   if (headerLen + escaped.length > TG_MESSAGE_LIMIT) {
@@ -189,12 +190,12 @@ function truncateBodyForTg(headerLen, body, maxLen) {
 
 export function buildCompactNotificationText(parsed, rawFrom, rawTo) {
   const sender = escAddr(formatAddress(parsed.from) || rawFrom);
-  const subject = esc(parsed.subject || '(无主题)');
+  const subject = esc(parsed.subject || t('email.noSubject'));
   const time = parsed.date ? esc(formatDate(parsed.date)) : '';
   let text = `📧 ${sender}\n<b>${subject}</b>`;
   if (time) text += ` - ${time}`;
   const to = esc(rawTo);
-  text += `\n收件人：${to}`;
+  text += `\n${t('email.recipient')}${to}`;
   return text;
 }
 
@@ -202,16 +203,16 @@ export function buildCompactNotificationText(parsed, rawFrom, rawTo) {
 
 export function buildListText(active, paused, prefixDomains, globalMute, mutedPrefixes, storageInfo) {
   if (active.length === 0 && paused.length === 0) {
-    let text = '📧 未设置过滤，所有邮件均会转发。\n点击下方按钮添加。';
-    if (globalMute) text += '\n\n🔇 全局静音已开启';
+    let text = t('email.list.empty');
+    if (globalMute) text += '\n\n' + t('email.list.globalMute');
     if (storageInfo) {
       text += `\n\n💾 ${formatSize(storageInfo.used)} / ${formatSize(storageInfo.total)}`;
       if (storageInfo.used / storageInfo.total > 0.8) text += ' ⚠️';
     }
     return text;
   }
-  let text = '📧 邮箱过滤规则：\n';
-  if (globalMute) text += '🔇 全局静音已开启\n';
+  let text = t('email.list.title');
+  if (globalMute) text += t('email.list.globalMute') + '\n';
   const muted = mutedPrefixes || [];
   for (const p of active) {
     const domains = (prefixDomains || {})[p] || [];
@@ -223,7 +224,7 @@ export function buildListText(active, paused, prefixDomains, globalMute, mutedPr
   for (const p of paused) {
     const domains = (prefixDomains || {})[p] || [];
     const domainStr = domains.length > 0 ? ` (@${domains.join(', @')})` : '';
-    text += `⏸️ ${p}${domainStr} (已暂停)\n`;
+    text += `⏸️ ${p}${domainStr} ${t('email.list.paused')}\n`;
   }
   if (storageInfo) {
     text += `\n💾 ${formatSize(storageInfo.used)} / ${formatSize(storageInfo.total)}`;
@@ -247,39 +248,39 @@ export function buildListKeyboard(active, paused, globalMute, starredCount) {
     ]);
   }
   const addRow = [
-    { text: '➕ 添加前缀', callback_data: 'add' },
-    { text: '🎲 随机前缀', callback_data: 'random' },
+    { text: t('email.list.addPrefix'), callback_data: 'add' },
+    { text: t('email.list.randomPrefix'), callback_data: 'random' },
   ];
   rows.push(addRow);
-  const ctrlRow = [{ text: '📧 邮箱管理', callback_data: 'em' }];
+  const ctrlRow = [{ text: t('email.list.mgmt'), callback_data: 'em' }];
   if (active.length > 0) {
-    ctrlRow.push({ text: '⏸️ 暂停全部', callback_data: 'pause_all' });
+    ctrlRow.push({ text: t('email.list.pauseAll'), callback_data: 'pause_all' });
   } else if (paused.length > 0) {
-    ctrlRow.push({ text: '✅ 启用全部', callback_data: 'resume_all' });
+    ctrlRow.push({ text: t('email.list.resumeAll'), callback_data: 'resume_all' });
   }
   ctrlRow.push(globalMute
-    ? { text: '🔔 取消静音', callback_data: 'global_unmute' }
-    : { text: '🔇 全局静音', callback_data: 'global_mute' });
+    ? { text: t('email.list.unmute'), callback_data: 'global_unmute' }
+    : { text: t('email.list.mute'), callback_data: 'global_mute' });
   rows.push(ctrlRow);
   if (starredCount > 0) {
-    rows.push([{ text: `⭐ 收藏 (${starredCount})`, callback_data: 'starlist' }]);
+    rows.push([{ text: t('email.list.starred', { n: starredCount }), callback_data: 'starlist' }]);
   }
   return { inline_keyboard: rows };
 }
 
 // 子菜单：单个前缀的设置页面
 export function buildSettingsText(prefix, domains, confirmDel, isMuted, confirmRmDomain) {
-  let text = `⚙️ 设置: <b>${esc(prefix)}</b>`;
+  let text = t('email.settings.title') + `<b>${esc(prefix)}</b>`;
   if (isMuted) text += ' 🔇';
   text += '\n\n';
   if (domains.length > 0) {
-    text += '允许的域名：\n';
+    text += t('email.settings.domains');
     for (const d of domains) text += `  • @${esc(d)}\n`;
   } else {
-    text += '允许的域名：所有\n';
+    text += t('email.settings.domainsAll');
   }
-  if (confirmDel) text += '\n⚠️ 确认要删除此前缀吗？';
-  if (confirmRmDomain) text += `\n⚠️ 确认要删除域名 @${esc(confirmRmDomain)} 吗？`;
+  if (confirmDel) text += t('email.settings.confirmDel');
+  if (confirmRmDomain) text += t('email.settings.confirmRmDomain', { d: esc(confirmRmDomain) });
   return text.trim();
 }
 
@@ -288,8 +289,8 @@ export function buildSettingsKeyboard(prefix, domains, confirmDel, isMuted, conf
   for (const d of domains) {
     if (confirmRmDomain === d) {
       rows.push([
-        { text: `⚠️ 确认删除 @${d}`, callback_data: `confirm_rm_domain:${prefix}:${d}` },
-        { text: '取消', callback_data: `settings:${prefix}` },
+        { text: t('email.settings.confirmDelDomain', { d }), callback_data: `confirm_rm_domain:${prefix}:${d}` },
+        { text: t('btn.cancel'), callback_data: `settings:${prefix}` },
       ]);
     } else {
       rows.push([
@@ -298,20 +299,20 @@ export function buildSettingsKeyboard(prefix, domains, confirmDel, isMuted, conf
       ]);
     }
   }
-  rows.push([{ text: '➕ 添加域名', callback_data: `add_domain:${prefix}` }]);
+  rows.push([{ text: t('email.settings.addDomain'), callback_data: `add_domain:${prefix}` }]);
   rows.push([isMuted
-    ? { text: '🔔 取消静音', callback_data: `unmute_prefix:${prefix}` }
-    : { text: '🔇 静音此前缀', callback_data: `mute_prefix:${prefix}` },
+    ? { text: t('email.settings.unmutePrefix'), callback_data: `unmute_prefix:${prefix}` }
+    : { text: t('email.settings.mutePrefix'), callback_data: `mute_prefix:${prefix}` },
   ]);
   if (confirmDel) {
     rows.push([
-      { text: '⚠️ 确认删除', callback_data: `confirm_del:${prefix}` },
-      { text: '取消', callback_data: `settings:${prefix}` },
+      { text: t('email.settings.confirmDelBtn'), callback_data: `confirm_del:${prefix}` },
+      { text: t('btn.cancel'), callback_data: `settings:${prefix}` },
     ]);
   } else {
-    rows.push([{ text: '🗑 删除前缀', callback_data: `del:${prefix}` }]);
+    rows.push([{ text: t('email.settings.delPrefix'), callback_data: `del:${prefix}` }]);
   }
-  rows.push([{ text: '◀️ 返回', callback_data: 'back' }]);
+  rows.push([{ text: t('btn.back'), callback_data: 'back' }]);
   return { inline_keyboard: rows };
 }
 
@@ -321,23 +322,23 @@ export function buildEmailActionKeyboard(notifMsgId, senderMuted, senderBlocked,
   // 第一行：附件 / .eml / 收藏 / 删除
   const fileRow = [];
   if (attCount > 0) {
-    fileRow.push({ text: `📎 附件 (${attCount})`, callback_data: `att:${notifMsgId}` });
+    fileRow.push({ text: t('email.btn.att', { n: attCount }), callback_data: `att:${notifMsgId}` });
   }
-  fileRow.push({ text: '📄 .eml', callback_data: `eml:${notifMsgId}` });
+  fileRow.push({ text: t('email.btn.eml'), callback_data: `eml:${notifMsgId}` });
   fileRow.push(starred
-    ? { text: '⭐ 取消收藏', callback_data: `unstar:${notifMsgId}` }
-    : { text: '收藏', callback_data: `star:${notifMsgId}` });
+    ? { text: t('email.btn.unstar'), callback_data: `unstar:${notifMsgId}` }
+    : { text: t('email.btn.star'), callback_data: `star:${notifMsgId}` });
   if (attCount > 0) {
-    fileRow.push({ text: '🗑 删除附件', callback_data: `del_email:${notifMsgId}` });
+    fileRow.push({ text: t('email.btn.delAtt'), callback_data: `del_email:${notifMsgId}` });
   }
   rows.push(fileRow);
   // 第二行：发件人操作
   const muteBtn = senderMuted
-    ? { text: '🔔 取消静音', callback_data: `us:${notifMsgId}` }
-    : { text: '🔇 静音发件人', callback_data: `ms:${notifMsgId}` };
+    ? { text: t('email.btn.unmuteSender'), callback_data: `us:${notifMsgId}` }
+    : { text: t('email.btn.muteSender'), callback_data: `ms:${notifMsgId}` };
   const blockBtn = senderBlocked
-    ? { text: '✅ 取消屏蔽', callback_data: `ubs:${notifMsgId}` }
-    : { text: '⛔ 屏蔽发件人', callback_data: `bs:${notifMsgId}` };
+    ? { text: t('email.btn.unblockSender'), callback_data: `ubs:${notifMsgId}` }
+    : { text: t('email.btn.blockSender'), callback_data: `bs:${notifMsgId}` };
   rows.push([muteBtn, blockBtn]);
   return { inline_keyboard: rows };
 }
@@ -354,7 +355,7 @@ export function searchEntries(entries, keyword) {
 
 export function formatDateShort(ts) {
   const d = new Date(ts);
-  return `${d.getMonth() + 1}月${d.getDate()}日`;
+  return t('email.search.dateShort', { m: d.getMonth() + 1, d: d.getDate() });
 }
 
 export function buildSearchText(keyword, results, page) {
@@ -363,20 +364,20 @@ export function buildSearchText(keyword, results, page) {
   const start = page * SEARCH_PAGE_SIZE;
   const pageResults = results.slice(start, start + SEARCH_PAGE_SIZE);
 
-  let text = `🔍 搜索 "<b>${esc(keyword)}</b>"（共 ${total} 条`;
-  if (totalPages > 1) text += `，第 ${page + 1}/${totalPages} 页`;
+  let text = t('email.search.title', { kw: esc(keyword), total });
+  if (totalPages > 1) text += t('email.search.page', { page: page + 1, pages: totalPages });
   text += '）\n\n';
 
   if (total === 0) {
-    text += '没有找到匹配的邮件。';
+    text += t('email.search.noResult');
     return text;
   }
 
   for (let i = 0; i < pageResults.length; i++) {
     const e = pageResults[i];
     const num = start + i + 1;
-    const sender = e.sender ? esc(e.sender) : '未知发件人';
-    const subject = e.subject ? esc(e.subject) : '(无主题)';
+    const sender = e.sender ? esc(e.sender) : t('email.search.unknownSender');
+    const subject = e.subject ? esc(e.subject) : t('email.noSubject');
     const date = formatDateShort(e.ts);
     const star = e.starred ? ' ⭐' : '';
     text += `<b>${num}.</b> 📧 ${sender}${star}\n     ${subject} - ${date}\n\n`;
@@ -394,19 +395,19 @@ export function buildSearchKeyboard(results, page) {
   // 查看按钮行
   const viewRow = [];
   for (let i = 0; i < pageResults.length; i++) {
-    viewRow.push({ text: `${start + i + 1}. 查看`, callback_data: `search_view:${pageResults[i].id}` });
+    viewRow.push({ text: t('email.search.view', { n: start + i + 1 }), callback_data: `search_view:${pageResults[i].id}` });
   }
   if (viewRow.length > 0) rows.push(viewRow);
 
   // 翻页行
   if (totalPages > 1) {
     const navRow = [];
-    if (page > 0) navRow.push({ text: '◀️ 上一页', callback_data: `search_page:${page - 1}` });
-    if (page < totalPages - 1) navRow.push({ text: '▶️ 下一页', callback_data: `search_page:${page + 1}` });
+    if (page > 0) navRow.push({ text: t('email.search.prev'), callback_data: `search_page:${page - 1}` });
+    if (page < totalPages - 1) navRow.push({ text: t('email.search.next'), callback_data: `search_page:${page + 1}` });
     rows.push(navRow);
   }
 
-  rows.push([{ text: '◀️ 返回', callback_data: 'back' }]);
+  rows.push([{ text: t('btn.back'), callback_data: 'back' }]);
   return { inline_keyboard: rows };
 }
 
@@ -427,17 +428,17 @@ export function buildMergedSenderList(blockedList, mutedList) {
 
 export function buildMgmtText(senders, page, storageInfo, confirmState, searchKeyword) {
   let text = searchKeyword
-    ? `🔍 搜索 "<b>${esc(searchKeyword)}</b>"`
-    : '📧 <b>邮箱管理</b>';
+    ? t('email.mgmt.searchTitle', { kw: esc(searchKeyword) })
+    : t('email.mgmt.title');
   text += '\n\n';
   if (senders.length === 0) {
-    text += searchKeyword ? '没有匹配的地址。' : '没有屏蔽或静音的发件人。';
+    text += searchKeyword ? t('email.mgmt.noMatch') : t('email.mgmt.noSenders');
   } else {
     const totalPages = Math.ceil(senders.length / MGMT_PAGE_SIZE);
     text += searchKeyword
-      ? `匹配 ${senders.length} 个`
-      : `屏蔽/静音列表（${senders.length} 个`;
-    if (totalPages > 1) text += `，第 ${page + 1}/${totalPages} 页`;
+      ? t('email.mgmt.matchCount', { n: senders.length })
+      : t('email.mgmt.listCount', { n: senders.length });
+    if (totalPages > 1) text += t('email.mgmt.page', { page: page + 1, pages: totalPages });
     text += searchKeyword ? '：\n' : '）：\n';
     const start = page * MGMT_PAGE_SIZE;
     const pageItems = senders.slice(start, start + MGMT_PAGE_SIZE);
@@ -450,9 +451,9 @@ export function buildMgmtText(senders, page, storageInfo, confirmState, searchKe
     text += `\n\n💾 ${formatSize(storageInfo.used)} / ${formatSize(storageInfo.total)}`;
     if (storageInfo.used / storageInfo.total > 0.8) text += ' ⚠️';
   }
-  if (confirmState === 'att') text += '\n\n⚠️ 确认要清理所有非收藏邮件的附件吗？';
-  else if (confirmState === 'all') text += '\n\n⚠️ 确认要清理所有非收藏邮件吗？';
-  else if (confirmState === 'clrb') text += '\n\n⚠️ 确认要清空所有屏蔽发件人吗？';
+  if (confirmState === 'att') text += t('email.mgmt.confirmCleanAtt');
+  else if (confirmState === 'all') text += t('email.mgmt.confirmCleanAll');
+  else if (confirmState === 'clrb') text += t('email.mgmt.confirmClearBlock');
   return text.trim();
 }
 
@@ -479,36 +480,36 @@ export function buildMgmtKeyboard(senders, page, confirmState, searchKeyword) {
   if (!searchKeyword) {
     if (confirmState === 'att') {
       rows.push([
-        { text: '⚠️ 确认清理附件', callback_data: 'emcca' },
-        { text: '取消', callback_data: 'em' },
+        { text: t('email.mgmt.btnConfirmAtt'), callback_data: 'emcca' },
+        { text: t('btn.cancel'), callback_data: 'em' },
       ]);
     } else if (confirmState === 'all') {
       rows.push([
-        { text: '⚠️ 确认清理邮件', callback_data: 'emccd' },
-        { text: '取消', callback_data: 'em' },
+        { text: t('email.mgmt.btnConfirmAll'), callback_data: 'emccd' },
+        { text: t('btn.cancel'), callback_data: 'em' },
       ]);
     } else if (confirmState === 'clrb') {
       rows.push([
-        { text: '⚠️ 确认清空屏蔽', callback_data: 'emccb' },
-        { text: '取消', callback_data: 'em' },
+        { text: t('email.mgmt.btnConfirmBlock'), callback_data: 'emccb' },
+        { text: t('btn.cancel'), callback_data: 'em' },
       ]);
     } else {
       rows.push([
-        { text: '🧹 清理附件', callback_data: 'emca' },
-        { text: '🗑 清理邮件', callback_data: 'emcd' },
+        { text: t('email.mgmt.btnCleanAtt'), callback_data: 'emca' },
+        { text: t('email.mgmt.btnCleanAll'), callback_data: 'emcd' },
       ]);
       const actionRow = [];
       if (senders.some(s => s.blocked)) {
-        actionRow.push({ text: '🗑 清空屏蔽', callback_data: 'emcb' });
+        actionRow.push({ text: t('email.mgmt.btnClearBlock'), callback_data: 'emcb' });
       }
       if (senders.length > 0) {
-        actionRow.push({ text: '🔍 查询', callback_data: 'ems' });
+        actionRow.push({ text: t('email.mgmt.btnSearch'), callback_data: 'ems' });
       }
       if (actionRow.length > 0) rows.push(actionRow);
     }
-    rows.push([{ text: '◀️ 返回', callback_data: 'back' }]);
+    rows.push([{ text: t('btn.back'), callback_data: 'back' }]);
   } else {
-    rows.push([{ text: '◀️ 返回管理', callback_data: 'em' }]);
+    rows.push([{ text: t('email.mgmt.btnBackMgmt'), callback_data: 'em' }]);
   }
   return { inline_keyboard: rows };
 }
@@ -516,14 +517,14 @@ export function buildMgmtKeyboard(senders, page, confirmState, searchKeyword) {
 // ============ 收藏 ============
 
 export function buildStarredListText(starredEntries, metaMap, starMaxStorage) {
-  if (starredEntries.length === 0) return '⭐ 没有收藏的邮件。';
+  if (starredEntries.length === 0) return t('email.star.empty');
   const maxStar = starMaxStorage || 50 * 1024 * 1024;
-  let text = '⭐ 收藏邮件：\n\n';
+  let text = t('email.star.title');
   let totalStarredSize = 0;
   for (let n = 0; n < starredEntries.length; n++) {
     const entry = starredEntries[n];
     const meta = metaMap[entry.id];
-    const subject = meta?.subject || entry.subject || '(无主题)';
+    const subject = meta?.subject || entry.subject || t('email.noSubject');
     const sender = meta?.sender || entry.sender || 'unknown';
     const date = new Date(entry.ts);
     const dateStr = `${date.getMonth() + 1}/${date.getDate()}`;
@@ -532,10 +533,10 @@ export function buildStarredListText(starredEntries, metaMap, starMaxStorage) {
     totalStarredSize += entrySize;
     text += `${n + 1}. ★ <b>${esc(subject)}</b>\n`;
     text += `   ${escAddr(sender)} · ${dateStr}`;
-    if (imgCount > 0) text += ` · ${imgCount} 张图片`;
+    if (imgCount > 0) text += ` · ${t('email.star.photos', { n: imgCount })}`;
     text += ` · ${formatSize(entrySize)}\n\n`;
   }
-  text += `\n💾 收藏占用: ${formatSize(totalStarredSize)} / ${formatSize(maxStar)}`;
+  text += t('email.star.storage', { used: formatSize(totalStarredSize), total: formatSize(maxStar) });
   return text.trim();
 }
 
@@ -545,17 +546,17 @@ export function buildStarredListKeyboard(starredEntries, confirmDelId) {
     const entry = starredEntries[n];
     if (confirmDelId === entry.id) {
       rows.push([
-        { text: '⚠️ 确认删除邮件', callback_data: `confirm_del_att:${entry.id}` },
-        { text: '取消', callback_data: 'starlist' },
+        { text: t('email.star.btnConfirmDel'), callback_data: `confirm_del_att:${entry.id}` },
+        { text: t('btn.cancel'), callback_data: 'starlist' },
       ]);
     } else {
       rows.push([
-        { text: `${n + 1}. 📖 查看`, callback_data: `view_star:${entry.id}` },
-        { text: '🗑 删除邮件', callback_data: `del_att:${entry.id}` },
+        { text: t('email.star.btnView', { n: n + 1 }), callback_data: `view_star:${entry.id}` },
+        { text: t('email.star.btnDel'), callback_data: `del_att:${entry.id}` },
       ]);
     }
   }
-  rows.push([{ text: '◀️ 返回', callback_data: 'back' }]);
+  rows.push([{ text: t('btn.back'), callback_data: 'back' }]);
   return { inline_keyboard: rows };
 }
 
@@ -632,7 +633,7 @@ export async function editToStarredList(env, msgId, confirmDelId) {
   );
   starredEntries.forEach((e, i) => { metaMap[e.id] = metaResults[i]; });
   let text = buildStarredListText(starredEntries, metaMap, getStarMaxStorage(env));
-  if (confirmDelId) text += '\n\n⚠️ 确认要删除此邮件的所有存储数据吗？';
+  if (confirmDelId) text += t('email.star.confirmDel');
   const payload = {
     chat_id: env.TG_CHAT_ID,
     message_id: msgId,
@@ -718,7 +719,7 @@ export async function updateEmailKeyboard(env, emailId, extraMsgId) {
 
 export async function cmdAddPrefix(prefix, env) {
   if (!prefix || prefix.length > 64 || !/^[a-z0-9][a-z0-9._+-]*$/.test(prefix)) {
-    await sendTelegramMessage(env, '❌ 前缀格式无效：仅允许小写字母、数字、. _ + -，最长64字符');
+    await sendTelegramMessage(env, t('email.invalidPrefix'));
     return;
   }
   const active = await getActiveRules(env);
@@ -736,7 +737,7 @@ export async function cmdAddDomain(prefix, domain, env) {
   if (!pd[prefix]) pd[prefix] = [];
   if (!pd[prefix].includes(domain)) pd[prefix].push(domain);
   await setPrefixDomains(env, pd);
-  await sendTelegramMessage(env, `✅ 已为 <b>${esc(prefix)}</b> 添加域名 @${esc(domain)}`);
+  await sendTelegramMessage(env, t('email.domainAdded', { prefix: esc(prefix), domain: esc(domain) }));
 }
 
 export async function cmdList(env) {
@@ -745,7 +746,7 @@ export async function cmdList(env) {
 
 export async function cmdSearch(keyword, env) {
   if (!keyword) {
-    await sendTelegramPrompt(env, '请输入搜索关键词（发件人/主题）：');
+    await sendTelegramPrompt(env, t('email.prompt.search'));
     return;
   }
   await saveSearchQuery(env, keyword);
@@ -775,7 +776,7 @@ export async function handleEmailCallback(cbq, env, ctx) {
     const idx = active.indexOf(value);
     if (idx !== -1) { active.splice(idx, 1); paused.push(value); }
     await setActiveRules(env, active); await setPausedRules(env, paused);
-    toast = `⏸️ 已暂停 ${value}`;
+    toast = t('email.toast.paused', { v: value });
     await editToList(env, msgId);
   } else if (action === 'resume') {
     const active = await getActiveRules(env);
@@ -783,24 +784,24 @@ export async function handleEmailCallback(cbq, env, ctx) {
     const idx = paused.indexOf(value);
     if (idx !== -1) { paused.splice(idx, 1); active.push(value); }
     await setActiveRules(env, active); await setPausedRules(env, paused);
-    toast = `✅ 已恢复 ${value}`;
+    toast = t('email.toast.resumed', { v: value });
     await editToList(env, msgId);
   } else if (action === 'pause_all') {
     const active = await getActiveRules(env);
     const paused = await getPausedRules(env);
     paused.push(...active); active.length = 0;
     await setActiveRules(env, active); await setPausedRules(env, paused);
-    toast = '⏸️ 已暂停全部';
+    toast = t('email.toast.pausedAll');
     await editToList(env, msgId);
   } else if (action === 'resume_all') {
     const active = await getActiveRules(env);
     const paused = await getPausedRules(env);
     active.push(...paused); paused.length = 0;
     await setActiveRules(env, active); await setPausedRules(env, paused);
-    toast = '✅ 已启用全部';
+    toast = t('email.toast.resumedAll');
     await editToList(env, msgId);
   } else if (action === 'add') {
-    await sendTelegramPrompt(env, '请输入要添加的邮箱前缀：');
+    await sendTelegramPrompt(env, t('email.prompt.addPrefix'));
     await answerCallbackQuery(env, cbq.id);
     return;
   } else if (action === 'random') {
@@ -810,16 +811,16 @@ export async function handleEmailCallback(cbq, env, ctx) {
       active.push(prefix);
       await setActiveRules(env, active);
     }
-    toast = `🎲 已添加 ${prefix}`;
+    toast = t('email.toast.randomAdded', { v: prefix });
     await editToList(env, msgId);
-    await sendTelegramMessage(env, `🎲 已添加随机前缀：<b>${esc(prefix)}</b>`);
+    await sendTelegramMessage(env, t('email.toast.randomAddedMsg', { v: esc(prefix) }));
   } else if (action === 'global_mute') {
     await setGlobalMute(env, true);
-    toast = '🔇 已开启全局静音';
+    toast = t('email.toast.muteOn');
     await editToList(env, msgId);
   } else if (action === 'global_unmute') {
     await setGlobalMute(env, false);
-    toast = '🔔 已关闭全局静音';
+    toast = t('email.toast.muteOff');
     await editToList(env, msgId);
 
   } else if (action === 'back') {
@@ -830,7 +831,7 @@ export async function handleEmailCallback(cbq, env, ctx) {
     await editToSettings(env, msgId, value);
   } else if (action === 'del') {
     await editToSettings(env, msgId, value, true);
-    toast = `确认要删除 ${value} 吗？`;
+    toast = t('email.toast.confirmDel', { v: value });
   } else if (action === 'confirm_del') {
     const active = await getActiveRules(env);
     const paused = await getPausedRules(env);
@@ -847,18 +848,18 @@ export async function handleEmailCallback(cbq, env, ctx) {
     const mpIdx = mp.indexOf(value);
     if (mpIdx !== -1) mp.splice(mpIdx, 1);
     await Promise.all([setPrefixDomains(env, pd), mpIdx !== -1 ? setMutedPrefixes(env, mp) : null]);
-    toast = `❌ 已删除 ${value}`;
+    toast = t('email.toast.deleted', { v: value });
     await editToList(env, msgId);
     // 发送删除记录，方便误操作恢复
-    let record = `🗑 已删除前缀 <b>${esc(value)}</b>`;
-    record += wasActive ? '（原状态：启用）' : '（原状态：暂停）';
+    let record = t('email.toast.deletedRecord', { v: esc(value) });
+    record += wasActive ? t('email.toast.wasActive') : t('email.toast.wasPaused');
     if (deletedDomains.length > 0) {
-      record += `\n域名限制：${deletedDomains.map(d => esc(d)).join(', ')}`;
+      record += t('email.toast.domainLimit') + deletedDomains.map(d => esc(d)).join(', ');
     }
     await sendTelegramMessage(env, record);
   } else if (action === 'add_domain') {
     // value = prefix
-    await sendTelegramPrompt(env, `请输入 ${value} 允许的域名：`);
+    await sendTelegramPrompt(env, t('email.prompt.addDomain', { v: value }));
     await answerCallbackQuery(env, cbq.id);
     return;
   } else if (action === 'rm_domain') {
@@ -866,7 +867,7 @@ export async function handleEmailCallback(cbq, env, ctx) {
     const sepIdx = value.indexOf(':');
     const prefix = value.substring(0, sepIdx);
     const domain = value.substring(sepIdx + 1);
-    toast = '⚠️ 再次点击确认删除';
+    toast = t('email.toast.confirmRmDomain');
     await editToSettings(env, msgId, prefix, false, domain);
   } else if (action === 'confirm_rm_domain') {
     const sepIdx = value.indexOf(':');
@@ -878,20 +879,20 @@ export async function handleEmailCallback(cbq, env, ctx) {
     if (idx !== -1) list.splice(idx, 1);
     if (list.length === 0) delete pd[prefix]; else pd[prefix] = list;
     await setPrefixDomains(env, pd);
-    toast = `❌ 已移除 @${domain}`;
+    toast = t('email.toast.domainRemoved', { d: domain });
     await editToSettings(env, msgId, prefix);
   } else if (action === 'mute_prefix') {
     const mp = await getMutedPrefixes(env);
     if (!mp.includes(value)) mp.push(value);
     await setMutedPrefixes(env, mp);
-    toast = `🔇 已静音 ${value}`;
+    toast = t('email.toast.prefixMuted', { v: value });
     await editToSettings(env, msgId, value);
   } else if (action === 'unmute_prefix') {
     const mp = await getMutedPrefixes(env);
     const idx = mp.indexOf(value);
     if (idx !== -1) mp.splice(idx, 1);
     await setMutedPrefixes(env, mp);
-    toast = `🔔 已取消静音 ${value}`;
+    toast = t('email.toast.prefixUnmuted', { v: value });
     await editToSettings(env, msgId, value);
 
   // ====== 邮件通知：发件人操作 ======
@@ -901,32 +902,32 @@ export async function handleEmailCallback(cbq, env, ctx) {
     const entry = idx.entries.find(e => e.id === targetId);
     const sender = meta?.sender || entry?.sender || '';
     if (!sender) {
-      toast = '⏰ 邮件数据已过期';
+      toast = t('email.toast.expired');
     } else if (action === 'ms') {
       const list = await getMutedSenders(env);
       if (!list.includes(sender)) list.push(sender);
       await setMutedSenders(env, list);
-      toast = `🔇 已静音 ${sender}`;
+      toast = t('email.toast.senderMuted', { v: sender });
       await updateEmailKeyboard(env, targetId, msgId);
     } else if (action === 'us') {
       const list = await getMutedSenders(env);
       const i = list.indexOf(sender);
       if (i !== -1) list.splice(i, 1);
       await setMutedSenders(env, list);
-      toast = `🔔 已取消静音 ${sender}`;
+      toast = t('email.toast.senderUnmuted', { v: sender });
       await updateEmailKeyboard(env, targetId, msgId);
     } else if (action === 'bs') {
       const list = await getBlockedSenders(env);
       if (!list.includes(sender)) list.push(sender);
       await setBlockedSenders(env, list);
-      toast = `⛔ 已屏蔽 ${sender}`;
+      toast = t('email.toast.senderBlocked', { v: sender });
       await updateEmailKeyboard(env, targetId, msgId);
     } else if (action === 'ubs') {
       const list = await getBlockedSenders(env);
       const i = list.indexOf(sender);
       if (i !== -1) list.splice(i, 1);
       await setBlockedSenders(env, list);
-      toast = `✅ 已取消屏蔽 ${sender}`;
+      toast = t('email.toast.senderUnblocked', { v: sender });
       await updateEmailKeyboard(env, targetId, msgId);
     }
 
@@ -944,7 +945,7 @@ export async function handleEmailCallback(cbq, env, ctx) {
           i: img.idx, fn: img.fn || `image_${img.idx}`, mime: img.mime || 'application/octet-stream',
         }));
     if (imageList.length === 0) {
-      toast = '没有可下载的图片附件';
+      toast = t('email.toast.noAttachments');
     } else {
       const mediaItems = [];
       for (const img of imageList) {
@@ -959,21 +960,21 @@ export async function handleEmailCallback(cbq, env, ctx) {
         });
       }
       if (mediaItems.length === 0) {
-        toast = '⏰ 附件已过期';
+        toast = t('email.toast.attExpired');
       } else {
         await sendTelegramMediaGroup(env, mediaItems, msgId);
-        toast = `📎 已发送 ${mediaItems.length} 个附件`;
+        toast = t('email.toast.attSent', { n: mediaItems.length });
       }
     }
   } else if (action === 'eml') {
     const emlData = await getStrippedEml(env, value);
-    if (!emlData) { toast = '⏰ 邮件数据已过期'; }
+    if (!emlData) { toast = t('email.toast.expired'); }
     else {
       const meta = await getMsgMeta(env, value);
       const subjectClean = (meta?.subject || 'email').replace(/[^\w\u4e00-\u9fff -]/g, '_').substring(0, 50);
       const emlBlob = new Blob([emlData], { type: 'message/rfc822' });
       await sendTelegramDocument(env, emlBlob, `${subjectClean}.eml`, msgId);
-      toast = '📄 .eml 已发送';
+      toast = t('email.toast.emlSent');
     }
 
   // ====== 邮件通知：收藏 ======
@@ -981,7 +982,7 @@ export async function handleEmailCallback(cbq, env, ctx) {
     const notifId = parseInt(value);
     const idx = await getEmailIndex(env);
     const entry = idx.entries.find(e => e.id === notifId);
-    if (!entry) { toast = '⏰ 邮件数据已过期'; }
+    if (!entry) { toast = t('email.toast.expired'); }
     else {
       // 检查收藏容量
       let starredSize = 0;
@@ -995,11 +996,11 @@ export async function handleEmailCallback(cbq, env, ctx) {
         (entry.images || []).reduce((s, img) => s + img.size, 0);
       const starMax = getStarMaxStorage(env);
       if (starredSize + entrySize > starMax) {
-        toast = `⚠️ 收藏空间不足（${formatSize(starredSize)}/${formatSize(starMax)}）`;
+        toast = t('email.toast.starFull', { used: formatSize(starredSize), total: formatSize(starMax) });
       } else {
         entry.starred = true;
         await setEmailIndex(env, idx);
-        toast = '⭐ 已收藏';
+        toast = t('email.toast.starred');
         await updateEmailKeyboard(env, notifId, msgId);
       }
     }
@@ -1010,7 +1011,7 @@ export async function handleEmailCallback(cbq, env, ctx) {
     if (entry) {
       entry.starred = false;
       await setEmailIndex(env, idx);
-      toast = '已取消收藏';
+      toast = t('email.toast.unstarred');
       await updateEmailKeyboard(env, notifId, msgId);
     }
 
@@ -1026,13 +1027,13 @@ export async function handleEmailCallback(cbq, env, ctx) {
       getMutedSenders(env), getBlockedSenders(env),
     ]);
     const entry = idx.entries.find(e => e.id === targetId);
-    if (!entry && !emlData) { toast = '⏰ 邮件数据已过期'; }
+    if (!entry && !emlData) { toast = t('email.toast.expired'); }
     else {
       const sender = entry?.sender || '';
       const subject = entry?.subject || '';
-      let text = `📖 <b>收藏邮件</b>\n\n`;
-      text += `<b>发件人：</b>${escAddr(sender || 'unknown')}\n`;
-      text += `<b>主题：</b>${esc(subject || '(无主题)')}\n`;
+      let text = t('email.star.viewTitle');
+      text += `${t('email.from')}${escAddr(sender || 'unknown')}\n`;
+      text += `${t('email.subject')}${esc(subject || t('email.noSubject'))}\n`;
       if (emlData) {
         try {
           const parsed = await new PostalMime().parse(emlData);
@@ -1057,13 +1058,13 @@ export async function handleEmailCallback(cbq, env, ctx) {
   // ====== 收藏列表：删除单封邮件（确认） ======
   } else if (action === 'del_att') {
     const targetId = parseInt(value);
-    toast = '⚠️ 再次点击确认删除';
+    toast = t('email.toast.confirmDelStar');
     await editToStarredList(env, msgId, targetId);
   } else if (action === 'confirm_del_att') {
     const targetId = parseInt(value);
     const idx = await getEmailIndex(env);
     const entry = idx.entries.find(e => e.id === targetId);
-    if (!entry) { toast = '⏰ 邮件数据已过期'; }
+    if (!entry) { toast = t('email.toast.expired'); }
     else {
       const delPromises = [];
       let freed = 0;
@@ -1081,7 +1082,7 @@ export async function handleEmailCallback(cbq, env, ctx) {
       entry.starred = false;
       idx.totalSize = calcStorageUsage(idx);
       await setEmailIndex(env, idx);
-      toast = `🗑 已删除，释放 ${formatSize(freed)}`;
+      toast = t('email.toast.freedSpace', { size: formatSize(freed) });
       await editToStarredList(env, msgId);
     }
 
@@ -1090,13 +1091,13 @@ export async function handleEmailCallback(cbq, env, ctx) {
     const targetId = parseInt(value);
     const idx = await getEmailIndex(env);
     const entry = idx.entries.find(e => e.id === targetId);
-    if (!entry) { toast = '没有存储数据'; }
-    else if (entry.starred) { toast = '⭐ 收藏邮件，请先取消收藏再删除'; }
+    if (!entry) { toast = t('email.toast.noStorage'); }
+    else if (entry.starred) { toast = t('email.toast.starredProtected'); }
     else {
-      toast = '⚠️ 再次点击确认删除';
+      toast = t('email.toast.confirmDelStar');
       const confirmKb = { inline_keyboard: [[
-        { text: '⚠️ 确认删除附件', callback_data: `confirm_del_email:${targetId}` },
-        { text: '取消', callback_data: `cancel_del_email:${targetId}` },
+        { text: t('email.btn.confirmDelAtt'), callback_data: `confirm_del_email:${targetId}` },
+        { text: t('btn.cancel'), callback_data: `cancel_del_email:${targetId}` },
       ]] };
       await fetchWithRetry(
         `https://api.telegram.org/bot${env.TG_BOT_TOKEN}/editMessageReplyMarkup`,
@@ -1109,7 +1110,7 @@ export async function handleEmailCallback(cbq, env, ctx) {
     const targetId = parseInt(value);
     const idx = await getEmailIndex(env);
     const entry = idx.entries.find(e => e.id === targetId);
-    if (!entry || (entry.images || []).length === 0) { toast = '没有可删除的附件'; }
+    if (!entry || (entry.images || []).length === 0) { toast = t('email.toast.noDelAtt'); }
     else {
       const delPromises = [];
       let freed = 0;
@@ -1127,7 +1128,7 @@ export async function handleEmailCallback(cbq, env, ctx) {
         meta.images = [];
         await saveMsgMeta(env, targetId, meta);
       }
-      toast = `🗑 已删除附件，释放 ${formatSize(freed)}`;
+      toast = t('email.toast.freedAtt', { size: formatSize(freed) });
       await updateEmailKeyboard(env, targetId);
     }
   } else if (action === 'cancel_del_email') {
@@ -1148,21 +1149,21 @@ export async function handleEmailCallback(cbq, env, ctx) {
     if (isBlocked && isMuted) {
       blockedList.splice(blockedList.indexOf(fullAddr), 1);
       await setBlockedSenders(env, blockedList);
-      toast = `✅ 已取消屏蔽 ${fullAddr}（仍在静音列表中）`;
+      toast = t('email.toast.unblockStillMuted', { v: fullAddr });
     } else if (isBlocked) {
       blockedList.splice(blockedList.indexOf(fullAddr), 1);
       await setBlockedSenders(env, blockedList);
-      toast = `✅ 已取消屏蔽 ${fullAddr}`;
+      toast = t('email.toast.unblocked', { v: fullAddr });
     } else if (isMuted) {
       mutedList.splice(mutedList.indexOf(fullAddr), 1);
       await setMutedSenders(env, mutedList);
-      toast = `✅ 已取消静音 ${fullAddr}`;
+      toast = t('email.toast.unmutedAddr', { v: fullAddr });
     }
     await editToMgmt(env, msgId);
   } else if (action === 'emp') {
     await editToMgmt(env, msgId, parseInt(value));
   } else if (action === 'emca') {
-    toast = '⚠️ 再次点击确认清理';
+    toast = t('email.toast.confirmClean');
     await editToMgmt(env, msgId, 0, 'att');
   } else if (action === 'emcca') {
     const idx = await getEmailIndex(env);
@@ -1182,10 +1183,10 @@ export async function handleEmailCallback(cbq, env, ctx) {
     }
     idx.totalSize = calcStorageUsage(idx);
     await setEmailIndex(env, idx);
-    toast = `🧹 已清理附件 ${formatSize(freed)}`;
+    toast = t('email.toast.cleanedAtt', { size: formatSize(freed) });
     await editToMgmt(env, msgId);
   } else if (action === 'emcd') {
-    toast = '⚠️ 再次点击确认清理';
+    toast = t('email.toast.confirmClean');
     await editToMgmt(env, msgId, 0, 'all');
   } else if (action === 'emccd') {
     const idx = await getEmailIndex(env);
@@ -1205,29 +1206,29 @@ export async function handleEmailCallback(cbq, env, ctx) {
     }
     idx.totalSize = calcStorageUsage(idx);
     await setEmailIndex(env, idx);
-    toast = `🗑 已清理所有邮件 ${formatSize(freed)}`;
+    toast = t('email.toast.cleanedAll', { size: formatSize(freed) });
     await editToMgmt(env, msgId);
   } else if (action === 'emcb') {
-    toast = '⚠️ 再次点击确认清空';
+    toast = t('email.toast.confirmClearBlock');
     await editToMgmt(env, msgId, 0, 'clrb');
   } else if (action === 'emccb') {
     await setBlockedSenders(env, []);
-    toast = '✅ 已清空屏蔽列表';
+    toast = t('email.toast.clearedBlock');
     await editToMgmt(env, msgId);
   } else if (action === 'ems') {
-    await sendTelegramPrompt(env, '请输入要查询的发件人地址关键词：');
+    await sendTelegramPrompt(env, t('email.prompt.mgmtSearch'));
     await answerCallbackQuery(env, cbq.id);
     return;
   } else if (action === 'emsp') {
     const keyword = await getMgmtSearch(env);
-    if (!keyword) { toast = '搜索已过期，请重新查询'; }
+    if (!keyword) { toast = t('email.toast.mgmtSearchExpired'); }
     else { await editToMgmt(env, msgId, parseInt(value), null, keyword); }
 
   // ====== 搜索结果翻页/查看 ======
   } else if (action === 'search_page') {
     const page = parseInt(value);
     const keyword = await getSearchQuery(env);
-    if (!keyword) { toast = '搜索已过期，请重新搜索'; }
+    if (!keyword) { toast = t('email.toast.searchExpired'); }
     else { await editToSearchResults(env, msgId, keyword, page); }
   } else if (action === 'search_view') {
     const targetId = parseInt(value);
@@ -1235,12 +1236,12 @@ export async function handleEmailCallback(cbq, env, ctx) {
       getEmailIndex(env), getMutedSenders(env), getBlockedSenders(env),
     ]);
     const entry = idx.entries.find(e => e.id === targetId);
-    if (!entry) { toast = '邮件数据已过期'; }
+    if (!entry) { toast = t('email.toast.expired'); }
     else {
       const emlData = entry.textSize > 0 ? await getStrippedEml(env, targetId) : null;
-      let text = `📖 <b>邮件详情</b>\n\n`;
-      text += `<b>发件人：</b>${escAddr(entry.sender || 'unknown')}\n`;
-      text += `<b>主题：</b>${esc(entry.subject || '(无主题)')}\n`;
+      let text = t('email.star.detailTitle');
+      text += `${t('email.from')}${escAddr(entry.sender || 'unknown')}\n`;
+      text += `${t('email.subject')}${esc(entry.subject || t('email.noSubject'))}\n`;
       if (emlData) {
         try {
           const parsed = await new PostalMime().parse(emlData);
@@ -1262,7 +1263,7 @@ export async function handleEmailCallback(cbq, env, ctx) {
     }
   } else if (action === 'search_back') {
     const keyword = await getSearchQuery(env);
-    if (!keyword) { toast = '搜索已过期，请重新搜索'; }
+    if (!keyword) { toast = t('email.toast.searchExpired'); }
     else { await editToSearchResults(env, msgId, keyword, 0); }
   }
 
@@ -1274,12 +1275,9 @@ export async function handleEmailCallback(cbq, env, ctx) {
 export async function handleEmailReply(msg, replyTo, text, env) {
   const input = text.toLowerCase().trim();
   try {
-    if (replyTo.text.startsWith('请输入要添加的邮箱前缀')) {
+    if (replyTo.text === t('email.prompt.addPrefix')) {
       await cmdAddPrefix(input, env);
-    } else if (replyTo.text.includes('允许的域名')) {
-      const match = replyTo.text.match(/请输入 (.+?) 允许的域名/);
-      if (match) await cmdAddDomain(match[1], input, env);
-    } else if (replyTo.text.startsWith('请输入搜索关键词')) {
+    } else if (replyTo.text === t('email.prompt.search')) {
       const keyword = text.trim();
       await saveSearchQuery(env, keyword);
       const idx = await getEmailIndex(env);
@@ -1288,7 +1286,7 @@ export async function handleEmailReply(msg, replyTo, text, env) {
       await sendTelegramMessage(env, buildSearchText(keyword, results, 0), null, {
         reply_markup: buildSearchKeyboard(results, 0),
       });
-    } else if (replyTo.text.startsWith('请输入要查询的发件人地址关键词')) {
+    } else if (replyTo.text === t('email.prompt.mgmtSearch')) {
       const keyword = text.trim();
       await saveMgmtSearch(env, keyword);
       const [blockedList, mutedList, idx] = await Promise.all([
@@ -1302,10 +1300,23 @@ export async function handleEmailReply(msg, replyTo, text, env) {
         buildMgmtText(senders, 0, storageInfo, null, keyword), null, {
           reply_markup: buildMgmtKeyboard(senders, 0, null, keyword),
         });
+    } else {
+      // Try addDomain pattern: extract prefix from template
+      const marker = '\x00';
+      const tpl = t('email.prompt.addDomain', { v: marker });
+      const mi = tpl.indexOf(marker);
+      if (mi !== -1) {
+        const before = tpl.slice(0, mi);
+        const after = tpl.slice(mi + 1);
+        if (replyTo.text.startsWith(before) && replyTo.text.endsWith(after)) {
+          const prefix = replyTo.text.slice(before.length, replyTo.text.length - after.length);
+          if (prefix) await cmdAddDomain(prefix, input, env);
+        }
+      }
     }
   } catch (err) {
     console.error('Webhook reply error:', err);
-    try { await sendTelegramMessage(env, `❌ 执行出错: ${err.message}`); } catch {}
+    try { await sendTelegramMessage(env, t('error.exec', { err: err.message })); } catch {}
   }
 }
 
@@ -1348,14 +1359,14 @@ export async function handleIncomingEmail(message, env) {
       parsed = await parser.parse(rawEmail);
     } catch (parseErr) {
       console.log('postal-mime parse failed:', parseErr.message);
-      const subject = message.headers?.get('subject') || '(解析失败)';
-      const fallbackText = `⚠️ <b>新邮件（解析失败）</b>\n\n`
-        + `<b>发件人：</b>${esc(rawFrom)}\n`
-        + `<b>收件人：</b>${esc(rawTo)}\n`
-        + `<b>主题：</b>${esc(subject)}\n\n`
+      const subject = message.headers?.get('subject') || t('email.parseFailed');
+      const fallbackText = t('email.parseFailedTitle')
+        + `${t('email.from')}${esc(rawFrom)}\n`
+        + `${t('email.to')}${esc(rawTo)}\n`
+        + `${t('email.subject')}${esc(subject)}\n\n`
         + `━━━━━━━━━━━━━━━━━━━━\n\n`
-        + `邮件解析失败，请登录邮箱查看原文。\n`
-        + `错误信息：${esc(parseErr.message)}`;
+        + `${t('email.parseFailedBody')}\n`
+        + `${t('email.parseFailedError')}${esc(parseErr.message)}`;
       await sendTelegramMessage(env, fallbackText, null, { disable_notification: shouldMute });
       return;
     }
@@ -1366,7 +1377,7 @@ export async function handleIncomingEmail(message, env) {
     if (!body && fixed.html) {
       body = htmlToText(fixed.html);
     }
-    if (!body) body = '(无正文)';
+    if (!body) body = t('email.noBody');
 
     // 附件分类：图片附件存储，非图片仅在通知中列出
     const maxSize = getAttachMaxSize(env);
@@ -1393,7 +1404,7 @@ export async function handleIncomingEmail(message, env) {
         }
       }
       if (nonImages.length > 0) {
-        nonImageInfo = '\n\n📋 非图片附件（不存储）：\n' +
+        nonImageInfo = t('email.att.nonImage') +
           nonImages.map(f => `  - ${f.name} (${formatSize(f.size)})`).join('\n');
       }
     }
@@ -1404,7 +1415,7 @@ export async function handleIncomingEmail(message, env) {
     if (unsubHeader) {
       const urls = unsubHeader.value.match(/https?:\/\/[^\s>,]+/g);
       if (urls && urls.length > 0) {
-        unsubInfo = `\n\n🔗 <a href="${esc(urls[0])}">退订此邮件列表</a>`;
+        unsubInfo = `\n\n🔗 <a href="${esc(urls[0])}">${t('email.att.unsubscribe')}</a>`;
       }
     }
 
@@ -1502,10 +1513,10 @@ export async function handleIncomingEmail(message, env) {
       const rawFrom = message.from || 'unknown';
       const rawTo = message.to || 'unknown';
       await sendTelegramMessage(env,
-        `❌ <b>邮件处理失败</b>\n\n`
-        + `<b>发件人：</b>${esc(rawFrom)}\n`
-        + `<b>收件人：</b>${esc(rawTo)}\n\n`
-        + `请登录邮箱查看原文。`
+        t('email.processFailed')
+        + `${t('email.from')}${esc(rawFrom)}\n`
+        + `${t('email.to')}${esc(rawTo)}\n\n`
+        + t('email.checkOriginal')
       );
     } catch { /* 彻底失败，静默 */ }
   }

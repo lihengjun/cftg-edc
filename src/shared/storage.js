@@ -1,4 +1,5 @@
 import { encryptData, decryptData } from './crypto.js';
+import { t, setLang } from '../i18n.js';
 
 // ============ 存储管理常量（可通过环境变量覆盖） ============
 
@@ -13,16 +14,16 @@ export const MAX_EMAIL_ENTRIES = 5000;
 // ============ 配置项定义 ============
 
 export const CONFIG_ITEMS = [
-  { key: 'maxStorageMB',     label: '💾 邮件存储上限', unit: 'MB',  min: 10,  max: 1000,  defaultVal: 300,  envKey: 'MAX_STORAGE_MB' },
-  { key: 'starMaxStorageMB', label: '⭐ 收藏存储上限', unit: 'MB',  min: 5,   max: 1000,  defaultVal: 50,   envKey: 'STAR_MAX_STORAGE_MB' },
-  { key: 'emlTtlDays',       label: '📧 邮件保留天数', unit: '天',  min: 1,   max: 365,   defaultVal: 60,   envKey: 'EML_TTL_DAYS' },
-  { key: 'maxEmailEntries',  label: '📋 邮件最大条目', unit: '条',  min: 100, max: 50000, defaultVal: 5000,  envKey: 'MAX_EMAIL_ENTRIES' },
-  { key: 'rateThreshold',    label: '📈 高频阈值',     unit: '封',   min: 1,   max: 100,   defaultVal: 10,   envKey: 'RATE_THRESHOLD',     desc: '超过则切换精简通知' },
-  { key: 'rateWindowMin',    label: '⏱️ 高频窗口',    unit: '分钟', min: 1,   max: 30,    defaultVal: 5,    envKey: 'RATE_WINDOW_MIN',    desc: '检测高频的时间范围' },
-  { key: 'attachMaxSizeMB',  label: '📎 附件上限',    unit: 'MB',   min: 1,   max: 20,    defaultVal: 5,    envKey: 'ATTACH_MAX_SIZE_MB', desc: '超过只列出不发送' },
-  { key: 'bodyMaxLength',    label: '📝 正文截断',    unit: '字符', min: 200, max: 3500,  defaultVal: 1500, envKey: 'BODY_MAX_LEN',       desc: '通知中正文最大显示长度' },
-  { key: 'trackingPixelKB',  label: '🔍 追踪像素',    unit: 'KB',   min: 1,   max: 50,    defaultVal: 2,    envKey: 'TRACKING_PIXEL_KB',  desc: '小于此的内嵌小图自动忽略' },
-  { key: 'maxPasswords',     label: '🔐 密码条数上限', unit: '条',   min: 0,   max: 10000, defaultVal: 0,    envKey: 'MAX_PASSWORDS' },
+  { key: 'maxStorageMB',     label: 'cfg.item.maxStorageMB',     unit: 'cfg.unit.mb',      min: 10,  max: 1000,  defaultVal: 300,  envKey: 'MAX_STORAGE_MB' },
+  { key: 'starMaxStorageMB', label: 'cfg.item.starMaxStorageMB', unit: 'cfg.unit.mb',      min: 5,   max: 1000,  defaultVal: 50,   envKey: 'STAR_MAX_STORAGE_MB' },
+  { key: 'emlTtlDays',       label: 'cfg.item.emlTtlDays',       unit: 'cfg.unit.days',    min: 1,   max: 365,   defaultVal: 60,   envKey: 'EML_TTL_DAYS' },
+  { key: 'maxEmailEntries',  label: 'cfg.item.maxEmailEntries',  unit: 'cfg.unit.count',   min: 100, max: 50000, defaultVal: 5000,  envKey: 'MAX_EMAIL_ENTRIES' },
+  { key: 'rateThreshold',    label: 'cfg.item.rateThreshold',    unit: 'cfg.unit.emails',  min: 1,   max: 100,   defaultVal: 10,   envKey: 'RATE_THRESHOLD',     desc: 'cfg.desc.rateThreshold' },
+  { key: 'rateWindowMin',    label: 'cfg.item.rateWindowMin',    unit: 'cfg.unit.minutes', min: 1,   max: 30,    defaultVal: 5,    envKey: 'RATE_WINDOW_MIN',    desc: 'cfg.desc.rateWindowMin' },
+  { key: 'attachMaxSizeMB',  label: 'cfg.item.attachMaxSizeMB',  unit: 'cfg.unit.mb',      min: 1,   max: 20,    defaultVal: 5,    envKey: 'ATTACH_MAX_SIZE_MB', desc: 'cfg.desc.attachMaxSizeMB' },
+  { key: 'bodyMaxLength',    label: 'cfg.item.bodyMaxLength',    unit: 'cfg.unit.chars',   min: 200, max: 3500,  defaultVal: 1500, envKey: 'BODY_MAX_LEN',       desc: 'cfg.desc.bodyMaxLength' },
+  { key: 'trackingPixelKB',  label: 'cfg.item.trackingPixelKB',  unit: 'cfg.unit.kb',      min: 1,   max: 50,    defaultVal: 2,    envKey: 'TRACKING_PIXEL_KB',  desc: 'cfg.desc.trackingPixelKB' },
+  { key: 'maxPasswords',     label: 'cfg.item.maxPasswords',     unit: 'cfg.unit.count',   min: 0,   max: 10000, defaultVal: 0,    envKey: 'MAX_PASSWORDS' },
 ];
 
 // ============ 系统配置 KV 读写 ============
@@ -100,6 +101,7 @@ export function getMaxPasswords(env) {
 // 异步加载 sysConfig 并挂载到 env（在请求入口调用一次）
 export async function loadSystemConfig(env) {
   env._sysConfig = await getSystemConfig(env);
+  setLang((env._sysConfig && env._sysConfig.lang) || 'en');
 }
 
 // 获取某项当前生效值（用于 UI 显示）
@@ -201,7 +203,7 @@ export async function getPasswordEntry(env, name) {
 export async function setPasswordEntry(env, name, entry, { overwrite = true } = {}) {
   if (!overwrite) {
     const existing = await env.KV.get(`pwd:${name}`);
-    if (existing) throw new Error(`密码条目 "${name}" 已存在`);
+    if (existing) throw new Error(t('storage.pwdExists', { name }));
   }
   const plaintext = JSON.stringify(entry);
   const encrypted = await encryptData(env, plaintext);
@@ -283,12 +285,12 @@ export async function cleanExpiredTrash(env) {
 export async function restoreFromTrash(env, deletedAt) {
   const trashList = await getTrashList(env);
   const trashItem = trashList.find(t => t.deletedAt === deletedAt);
-  if (!trashItem) return { ok: false, error: '回收站条目不存在' };
+  if (!trashItem) return { ok: false, error: t('storage.trashNotExist') };
   const entry = await getTrashEntry(env, deletedAt);
-  if (!entry) return { ok: false, error: '条目数据已丢失' };
+  if (!entry) return { ok: false, error: t('storage.trashDataLost') };
   let finalName = trashItem.name;
   if (await getPasswordEntry(env, finalName)) {
-    finalName = trashItem.name + '_恢复';
+    finalName = trashItem.name + t('storage.restoreSuffix');
     if (await getPasswordEntry(env, finalName)) {
       finalName = trashItem.name + '_' + deletedAt;
     }
@@ -299,7 +301,7 @@ export async function restoreFromTrash(env, deletedAt) {
     while (enc.encode(base).length > 60) base = base.slice(0, -1);
     finalName = base;
     if (await getPasswordEntry(env, finalName)) {
-      return { ok: false, error: '名称冲突，请手动重命名后重试' };
+      return { ok: false, error: t('storage.nameConflict') };
     }
   }
   try {
@@ -602,7 +604,7 @@ export async function runPasswordBackup(env) {
 
 export async function restorePasswordBackup(env, date) {
   const raw = await env.KV.get(`pwd_backup:${date}`);
-  if (!raw) return { ok: false, error: '备份不存在或已过期' };
+  if (!raw) return { ok: false, error: t('storage.backupNotExist') };
 
   const backup = JSON.parse(raw);
   await replaceAllPasswords(env, null, backup);

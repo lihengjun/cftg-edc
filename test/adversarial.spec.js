@@ -2,7 +2,7 @@
  * 对抗性测试 — 极端输入和边界条件
  * 模拟一个极度变态的用户，穷举各种奇怪操作
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import {
 	esc, classifyAttachment, buildAttachmentSummary, buildNotificationText,
 	buildCompactNotificationText,
@@ -24,7 +24,10 @@ import {
 	isAllowedRecipient, htmlToText,
 	calcStorageUsage, cleanExpiredEntries,
 	getImageTtl,
+	setLang, t,
 } from '../src';
+
+beforeEach(() => setLang('zh'));
 
 // ============ BUG #1: view_star / search_view 没有 TG 二次截断 ============
 
@@ -310,11 +313,12 @@ describe('buildConfigKeyboard 主页布局', () => {
 	it('键盘布局匹配预期', () => {
 		const kb = buildConfigKeyboard();
 		const rows = kb.inline_keyboard;
-		expect(rows.length).toBe(2); // mail+pwd, back
+		expect(rows.length).toBe(3); // mail+pwd, lang, back
 
 		expect(rows[0][0].callback_data).toBe('cfg_mail');
 		expect(rows[0][1].callback_data).toBe('cfg_pwd');
-		expect(rows[1][0].callback_data).toBe('back');
+		expect(rows[1][0].callback_data).toBe('cfg_lang');
+		expect(rows[2][0].callback_data).toBe('back');
 	});
 });
 
@@ -341,7 +345,7 @@ describe('buildMailConfigText 邮件配置项显示', () => {
 		const text = buildMailConfigText(env, null);
 		for (const item of CONFIG_ITEMS) {
 			if (item.key === 'maxPasswords') continue;
-			expect(text).toContain(item.label);
+			expect(text).toContain(t(item.label));
 		}
 	});
 

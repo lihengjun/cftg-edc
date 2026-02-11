@@ -1,4 +1,5 @@
 import { deriveWebhookSecret } from './shared/utils.js';
+import { t } from './i18n.js';
 import { sendTelegramMessage, answerCallbackQuery } from './shared/telegram.js';
 import { loadSystemConfig, runPasswordBackup } from './shared/storage.js';
 import { cmdList, cmdSearch, handleEmailCallback, handleEmailReply, handleIncomingEmail } from './email/email.js';
@@ -16,7 +17,7 @@ const PWD_ACTIONS = new Set([
 const CONFIG_ACTIONS = new Set([
   'cfg', 'cfg_e', 'cfg_rst', 'cfg_rsta', 'cfg_mail', 'cfg_pwd',
   'cfg_ex', 'cfg_xp', 'cfg_xa', 'cfg_xk', 'cfg_im', 'cfg_ic', 'cfg_in',
-  'cfg_bk', 'cfg_br', 'cfg_brc',
+  'cfg_bk', 'cfg_br', 'cfg_brc', 'cfg_lang',
 ]);
 
 // ============ Webhook 路由 ============
@@ -42,7 +43,7 @@ export async function handleTelegramWebhook(request, env, ctx) {
       }
     } catch (err) {
       console.error('Callback error:', err);
-      await answerCallbackQuery(env, cbq.id, '❌ 操作失败');
+      await answerCallbackQuery(env, cbq.id, t('index.callbackError'));
     }
     return new Response('OK');
   }
@@ -111,7 +112,7 @@ export async function handleTelegramWebhook(request, env, ctx) {
     }
   } catch (err) {
     console.error(`Webhook command error: ${command}`, err);
-    try { await sendTelegramMessage(env, `❌ 命令执行出错: ${err.message}`); } catch {}
+    try { await sendTelegramMessage(env, t('index.commandError', { err: err.message })); } catch {}
   }
   return new Response('OK');
 }
@@ -134,6 +135,7 @@ export default {
 
     // /init：设置 Webhook + Bot 命令菜单
     if (url.pathname === '/init') {
+      await loadSystemConfig(env);
       const results = {};
       const secret = deriveWebhookSecret(env.TG_BOT_TOKEN);
       const workerUrl = `${url.origin}/`;
@@ -146,10 +148,10 @@ export default {
       results.webhook = await whRes.json();
 
       const commands = [
-        { command: 'list', description: '管理邮箱前缀' },
-        { command: 'search', description: '搜索邮件（发件人/主题）' },
-        { command: 'pwd', description: '密码管理' },
-        { command: 'config', description: '系统设置' },
+        { command: 'list', description: t('cmd.list') },
+        { command: 'search', description: t('cmd.search') },
+        { command: 'pwd', description: t('cmd.pwd') },
+        { command: 'config', description: t('cmd.config') },
       ];
       // 清除默认 scope 的命令（别人看不到菜单）
       const delRes = await fetch(`https://api.telegram.org/bot${env.TG_BOT_TOKEN}/deleteMyCommands`, {
@@ -201,3 +203,4 @@ export * from './shared/storage.js';
 export * from './email/email.js';
 export * from './config/config.js';
 export * from './password/password.js';
+export * from './i18n.js';
