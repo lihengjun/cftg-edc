@@ -6,6 +6,8 @@
 
 > Zero server. Zero cost. Zero maintenance. Just you and your Telegram bot.
 
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/lihengjun/cftg-edc)
+
 ## What is this?
 
 A single Cloudflare Worker that turns your Telegram bot into a personal command center:
@@ -82,15 +84,26 @@ Incoming Email
 
 ## Quick Start
 
-See the **[Setup Guide](docs/setup-guide.md)** for a complete step-by-step tutorial (Chinese).
+### Option 1: One-Click Deploy (Recommended)
 
-**TL;DR:**
+1. Click the **Deploy to Cloudflare** button above
+2. Authorize GitHub and Cloudflare access
+3. Fill in the required secrets when prompted:
+   - `TG_BOT_TOKEN` — from [@BotFather](https://t.me/BotFather)
+   - `TG_CHAT_ID` — send a message to your bot, then check `https://api.telegram.org/bot<TOKEN>/getUpdates`
+   - `PWD_KEY` — run `openssl rand -hex 32` to generate
+4. Wait for deployment to complete
+5. Visit `https://your-worker.workers.dev/init` to set up the Telegram webhook
+6. Configure **Email Routing** in Cloudflare Dashboard → your domain → Email → Email Routing → add a catch-all rule pointing to your Worker
+
+### Option 2: Manual Deploy
+
+See the **[Setup Guide](docs/setup-guide.md)** for a complete step-by-step tutorial (Chinese).
 
 ```bash
 git clone https://github.com/lihengjun/cftg-edc.git
 cd cftg-edc
 npm install
-cp wrangler.jsonc.example wrangler.jsonc
 # Edit wrangler.jsonc: fill in your KV namespace ID
 npx wrangler secret put TG_BOT_TOKEN
 npx wrangler secret put TG_CHAT_ID

@@ -1,0 +1,38 @@
+/**
+ * CFTG-EDC Wrangler Configuration
+ *
+ * For Deploy to Cloudflare button: KV namespace will be auto-provisioned.
+ * For manual deployment: create a KV namespace and fill in the id below.
+ *
+ * https://developers.cloudflare.com/workers/wrangler/configuration/
+ */
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "cftg-edc",
+	"main": "src/index.js",
+	"compatibility_date": "2026-02-05",
+	"observability": {
+		"enabled": true
+	},
+	"compatibility_flags": [
+		"nodejs_compat"
+	],
+	"kv_namespaces": [
+		{ "binding": "KV", "id": "<KV_NAMESPACE_ID>" }
+	],
+	"triggers": {
+		"crons": ["0 2 * * *"]
+	}
+	/**
+	 * Optional: Storage limit overrides (defaults shown below)
+	 * Can also be changed in Telegram via /config
+	 */
+	// "vars": {
+	// 	"MAX_STORAGE_MB": "300",
+	// 	"STAR_MAX_STORAGE_MB": "50",
+	// 	"EML_TTL_DAYS": "60",
+	// 	"MAX_EMAIL_ENTRIES": "5000",
+	// 	"RATE_THRESHOLD": "10",
+	// 	"MAX_PASSWORDS": "0"
+	// }
+}

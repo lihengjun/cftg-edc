@@ -1,3 +1,6 @@
-TG_BOT_TOKEN=<your-telegram-bot-token>
-TG_CHAT_ID=<your-telegram-chat-id>
-PWD_KEY=<64-char-hex-key-for-aes256-run-openssl-rand--hex-32>
+# Telegram Bot Token — get it from https://t.me/BotFather (send /newbot)
+TG_BOT_TOKEN=
+# Telegram Chat ID — send any message to your bot, then visit https://api.telegram.org/bot<YOUR_TOKEN>/getUpdates to find your chat ID
+TG_CHAT_ID=
+# Encryption key for password manager — generate with: openssl rand -hex 32
+PWD_KEY=

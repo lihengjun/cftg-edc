@@ -1,6 +1,6 @@
 {
 	"name": "cftg-edc",
-	"version": "0.0.0",
+	"version": "1.0.0",
 	"private": true,
 	"scripts": {
 		"deploy": "wrangler deploy",
@@ -15,5 +15,18 @@
 	},
 	"dependencies": {
 		"postal-mime": "^2.7.3"
+	},
+	"cloudflare": {
+		"bindings": {
+			"TG_BOT_TOKEN": {
+				"description": "Telegram Bot token. Create a bot via https://t.me/BotFather (send /newbot)"
+			},
+			"TG_CHAT_ID": {
+				"description": "Your Telegram chat ID. Send a message to your bot, then visit https://api.telegram.org/bot<TOKEN>/getUpdates"
+			},
+			"PWD_KEY": {
+				"description": "Encryption key for password manager. Generate with: openssl rand -hex 32"
+			}
+		}
 	}
 }

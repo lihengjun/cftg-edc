@@ -6,6 +6,8 @@
 
 > 零服务器、零成本、零维护。只需你和你的 Telegram Bot。
 
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/lihengjun/cftg-edc)
+
 ## 这是什么？
 
 一个 Cloudflare Worker，把你的 Telegram Bot 变成个人指挥中心：
@@ -82,15 +84,26 @@
 
 ## 快速上手
 
-完整教程请看 **[从零开始部署教程](docs/setup-guide.md)**。
+### 方式一：一键部署（推荐）
 
-**简要步骤：**
+1. 点击上方 **Deploy to Cloudflare** 按钮
+2. 授权 GitHub 和 Cloudflare 访问
+3. 按提示填入以下 Secrets：
+   - `TG_BOT_TOKEN` — 通过 [@BotFather](https://t.me/BotFather) 创建 Bot 获取
+   - `TG_CHAT_ID` — 给 Bot 发一条消息，然后访问 `https://api.telegram.org/bot<TOKEN>/getUpdates` 查看
+   - `PWD_KEY` — 运行 `openssl rand -hex 32` 生成
+4. 等待部署完成
+5. 访问 `https://你的worker.workers.dev/init` 设置 Telegram Webhook
+6. 在 Cloudflare Dashboard → 你的域名 → Email → Email Routing 中添加 Catch-all 规则指向你的 Worker
+
+### 方式二：手动部署
+
+完整教程请看 **[从零开始部署教程](docs/setup-guide.md)**。
 
 ```bash
 git clone https://github.com/lihengjun/cftg-edc.git
 cd cftg-edc
 npm install
-cp wrangler.jsonc.example wrangler.jsonc
 # 编辑 wrangler.jsonc：填入你的 KV namespace ID
 npx wrangler secret put TG_BOT_TOKEN
 npx wrangler secret put TG_CHAT_ID
