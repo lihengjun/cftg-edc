@@ -221,6 +221,18 @@
     cursor: pointer;
   }
   .value-content:hover { text-decoration: underline; }
+  .btn-copy {
+    background: var(--border);
+    color: var(--text);
+    border: none;
+    border-radius: 6px;
+    padding: 4px 12px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: background 0.2s;
+    flex-shrink: 0;
+  }
+  .btn-copy:hover { background: #3a3d4a; }
   .copied-toast {
     position: fixed;
     bottom: 24px;
@@ -312,22 +324,25 @@
     <div class="status" id="chatid-status"></div>
   </div>
 
-  <!-- Summary + Deploy -->
-  <div class="values-summary" id="values-summary">
-    <h3 data-i18n="summary.title">Your values (click to copy)</h3>
-    <div class="value-row">
-      <span class="value-label">TG_BOT_TOKEN</span>
-      <span class="value-content" id="summary-token" onclick="copyValue(this)"></span>
+  <!-- Deploy Flow -->
+  <div id="deploy-flow" style="display:none">
+    <div class="step" id="step-deploy-a">
+      <div class="step-header">
+        <div class="step-number">A</div>
+        <div class="step-title" data-i18n="deploy.a.title">Copy Token & Open Deploy Page</div>
+      </div>
+      <p class="step-desc" data-i18n="deploy.a.desc">Click the button to copy your Bot Token and open the Cloudflare deploy page. Paste it in the TG_BOT_TOKEN field.</p>
+      <button class="btn btn-deploy" onclick="deployStepA()" data-i18n="deploy.a.btn">Copy Token & Deploy</button>
     </div>
-    <div class="value-row">
-      <span class="value-label">TG_CHAT_ID</span>
-      <span class="value-content" id="summary-chatid" onclick="copyValue(this)"></span>
-    </div>
-  </div>
 
-  <div class="deploy-section">
-    <button class="btn btn-deploy" id="deploy-btn" disabled onclick="deploy()" data-i18n="btn.deploy">Deploy to Cloudflare</button>
-    <p class="deploy-note" data-i18n="deploy.note">You'll be redirected to Cloudflare. Paste the values above when prompted.</p>
+    <div class="step" id="step-deploy-b">
+      <div class="step-header">
+        <div class="step-number">B</div>
+        <div class="step-title" data-i18n="deploy.b.title">Copy Chat ID</div>
+      </div>
+      <p class="step-desc" data-i18n="deploy.b.desc">After pasting the token, click here to copy your Chat ID. Switch back to the deploy page and paste it in the TG_CHAT_ID field.</p>
+      <button class="btn btn-deploy" style="background:var(--border)" onclick="deployStepB()" data-i18n="deploy.b.btn">Copy Chat ID</button>
+    </div>
   </div>
 
   <footer>
@@ -353,9 +368,12 @@ const i18n = {
     'step3.desc': 'Open <a href="https://t.me/userinfobot" target="_blank">@userinfobot</a> on Telegram, send <code>/start</code>, it will reply with your ID. Paste it below.',
     'btn.verify': 'Verify',
     'btn.done': "I've done this",
-    'btn.deploy': 'Deploy to Cloudflare',
-    'summary.title': 'Your values (click to copy)',
-    'deploy.note': "You'll be redirected to Cloudflare. Paste the values above when prompted.",
+    'deploy.a.title': 'Copy Token & Open Deploy Page',
+    'deploy.a.desc': 'Click the button to copy your Bot Token and open the Cloudflare deploy page. Paste it in the TG_BOT_TOKEN field.',
+    'deploy.a.btn': 'Copy Token & Deploy',
+    'deploy.b.title': 'Copy Chat ID',
+    'deploy.b.desc': 'After pasting the token, click here to copy your Chat ID. Switch back to the deploy page and paste it in the TG_CHAT_ID field.',
+    'deploy.b.btn': 'Copy Chat ID',
     'token.verifying': 'Verifying...',
     'token.valid': 'Valid! Bot: ',
     'token.invalid': 'Invalid token. Please check and try again.',
@@ -377,9 +395,12 @@ const i18n = {
     'step3.desc': '在 Telegram 打开 <a href="https://t.me/userinfobot" target="_blank">@userinfobot</a>，发送 <code>/start</code>，它会回复你的 ID。粘贴到下方。',
     'btn.verify': '验证',
     'btn.done': '我已完成',
-    'btn.deploy': '部署到 Cloudflare',
-    'summary.title': '你的配置值（点击复制）',
-    'deploy.note': '将跳转到 Cloudflare 部署页面，按提示粘贴上面的值即可。',
+    'deploy.a.title': '复制 Token 并打开部署页面',
+    'deploy.a.desc': '点击按钮复制 Bot Token 并打开 Cloudflare 部署页面。在 TG_BOT_TOKEN 字段粘贴。',
+    'deploy.a.btn': '复制 Token 并部署',
+    'deploy.b.title': '复制 Chat ID',
+    'deploy.b.desc': '粘贴 Token 后，点击此处复制 Chat ID。切换回部署页面粘贴到 TG_CHAT_ID 字段。',
+    'deploy.b.btn': '复制 Chat ID',
     'token.verifying': '验证中...',
     'token.valid': '有效！Bot: ',
     'token.invalid': 'Token 无效，请检查后重试。',
@@ -492,30 +513,33 @@ async function verifyChatId() {
 
 function checkReady() {
   const ready = verifiedToken && verifiedChatId;
-  document.getElementById('deploy-btn').disabled = !ready;
-  const summary = document.getElementById('values-summary');
+  const flow = document.getElementById('deploy-flow');
   if (ready) {
-    summary.style.display = 'block';
-    document.getElementById('summary-token').textContent = verifiedToken.slice(0, 8) + '...' + verifiedToken.slice(-6);
-    document.getElementById('summary-token').dataset.value = verifiedToken;
-    document.getElementById('summary-chatid').textContent = verifiedChatId;
-    document.getElementById('summary-chatid').dataset.value = verifiedChatId;
+    flow.style.display = 'block';
+    flow.scrollIntoView({ behavior: 'smooth', block: 'center' });
   } else {
-    summary.style.display = 'none';
+    flow.style.display = 'none';
   }
 }
 
-function copyValue(el) {
-  const val = el.dataset.value || el.textContent;
-  navigator.clipboard.writeText(val);
-  const toast = document.getElementById('toast');
-  toast.textContent = i18n[lang]['copied'];
-  toast.classList.add('show');
-  setTimeout(() => toast.classList.remove('show'), 1500);
+async function deployStepA() {
+  await navigator.clipboard.writeText(verifiedToken);
+  document.getElementById('step-deploy-a').classList.add('completed');
+  showToast(lang === 'zh' ? 'Token 已复制！正在打开部署页面...' : 'Token copied! Opening deploy page...');
+  setTimeout(() => window.open(DEPLOY_URL, '_blank'), 800);
 }
 
-function deploy() {
-  window.open(DEPLOY_URL, '_blank');
+async function deployStepB() {
+  await navigator.clipboard.writeText(verifiedChatId);
+  document.getElementById('step-deploy-b').classList.add('completed');
+  showToast(lang === 'zh' ? 'Chat ID 已复制！切换到部署页面粘贴' : 'Chat ID copied! Switch to the deploy page and paste it');
+}
+
+function showToast(msg) {
+  const toast = document.getElementById('toast');
+  toast.textContent = msg;
+  toast.classList.add('show');
+  setTimeout(() => toast.classList.remove('show'), 3000);
 }
 
 // init
