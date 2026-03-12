@@ -285,10 +285,25 @@
   <div class="step" id="step2">
     <div class="step-header">
       <div class="step-number">2</div>
-      <div class="step-title" data-i18n="step2.title">Get Your Chat ID</div>
+      <div class="step-title" data-i18n="step2.title">Activate Your Bot</div>
     </div>
     <p class="step-desc" data-i18n-html="step2.desc">
-      First, open your bot in Telegram and send <code>/start</code> to activate it. Then open <a href="https://t.me/userinfobot" target="_blank">@userinfobot</a>, send <code>/start</code> to get your ID. Paste it below.
+      Open your newly created bot in Telegram (tap the link @BotFather gave you), and send <code>/start</code>. This allows the bot to send you messages.
+    </p>
+    <div class="input-row">
+      <button class="btn btn-verify" id="activate-btn" onclick="markActivated()" data-i18n="btn.done">I've done this</button>
+    </div>
+    <div class="status" id="activate-status"></div>
+  </div>
+
+  <!-- Step 3 -->
+  <div class="step" id="step3">
+    <div class="step-header">
+      <div class="step-number">3</div>
+      <div class="step-title" data-i18n="step3.title">Get Your Chat ID</div>
+    </div>
+    <p class="step-desc" data-i18n-html="step3.desc">
+      Open <a href="https://t.me/userinfobot" target="_blank">@userinfobot</a> on Telegram, send <code>/start</code>, it will reply with your ID. Paste it below.
     </p>
     <div class="input-row">
       <input type="text" id="chatid-input" placeholder="123456789" spellcheck="false">
@@ -332,9 +347,12 @@ const i18n = {
     subtitle: 'Prepare your Telegram Bot, then deploy to Cloudflare in one click.',
     'step1.title': 'Create Telegram Bot',
     'step1.desc': 'Open <a href="https://t.me/BotFather" target="_blank">@BotFather</a> on Telegram, send <code>/newbot</code>, follow the prompts, then paste the token below.',
-    'step2.title': 'Get Your Chat ID',
-    'step2.desc': 'First, open your bot in Telegram and send <code>/start</code> to activate it. Then open <a href="https://t.me/userinfobot" target="_blank">@userinfobot</a>, send <code>/start</code> to get your ID. Paste it below.',
+    'step2.title': 'Activate Your Bot',
+    'step2.desc': 'Open your newly created bot in Telegram (tap the link @BotFather gave you), and send <code>/start</code>. This allows the bot to send you messages.',
+    'step3.title': 'Get Your Chat ID',
+    'step3.desc': 'Open <a href="https://t.me/userinfobot" target="_blank">@userinfobot</a> on Telegram, send <code>/start</code>, it will reply with your ID. Paste it below.',
     'btn.verify': 'Verify',
+    'btn.done': "I've done this",
     'btn.deploy': 'Deploy to Cloudflare',
     'summary.title': 'Your values (click to copy)',
     'deploy.note': "You'll be redirected to Cloudflare. Paste the values above when prompted.",
@@ -353,9 +371,12 @@ const i18n = {
     subtitle: '准备好 Telegram Bot，然后一键部署到 Cloudflare。',
     'step1.title': '创建 Telegram Bot',
     'step1.desc': '在 Telegram 打开 <a href="https://t.me/BotFather" target="_blank">@BotFather</a>，发送 <code>/newbot</code>，按提示操作，然后将 Token 粘贴到下方。',
-    'step2.title': '获取你的 Chat ID',
-    'step2.desc': '先在 Telegram 打开你刚创建的 Bot，发送 <code>/start</code> 激活它。然后打开 <a href="https://t.me/userinfobot" target="_blank">@userinfobot</a>，发送 <code>/start</code> 获取你的 ID，粘贴到下方。',
+    'step2.title': '激活你的 Bot',
+    'step2.desc': '在 Telegram 打开你刚创建的 Bot（点击 @BotFather 给你的链接），发送 <code>/start</code>。这样 Bot 才能向你发送消息。',
+    'step3.title': '获取你的 Chat ID',
+    'step3.desc': '在 Telegram 打开 <a href="https://t.me/userinfobot" target="_blank">@userinfobot</a>，发送 <code>/start</code>，它会回复你的 ID。粘贴到下方。',
     'btn.verify': '验证',
+    'btn.done': '我已完成',
     'btn.deploy': '部署到 Cloudflare',
     'summary.title': '你的配置值（点击复制）',
     'deploy.note': '将跳转到 Cloudflare 部署页面，按提示粘贴上面的值即可。',
@@ -374,6 +395,7 @@ const i18n = {
 
 let lang = (navigator.language || '').startsWith('zh') ? 'zh' : 'en';
 let verifiedToken = '';
+let activated = false;
 let verifiedChatId = '';
 
 function switchLang(l) {
@@ -424,6 +446,12 @@ async function verifyToken() {
   }
 }
 
+function markActivated() {
+  activated = true;
+  document.getElementById('step2').classList.add('completed');
+  setStatus('activate-status', lang === 'zh' ? '✓ 很好，继续下一步' : '✓ Great, continue to the next step', 'success');
+}
+
 async function verifyChatId() {
   const input = document.getElementById('chatid-input');
   const chatId = input.value.trim();
@@ -450,7 +478,7 @@ async function verifyChatId() {
     if (data.ok) {
       input.className = 'valid';
       setStatus('chatid-status', i18n[lang]['chatid.valid'], 'success');
-      document.getElementById('step2').classList.add('completed');
+      document.getElementById('step3').classList.add('completed');
       verifiedChatId = chatId;
       checkReady();
     } else {
