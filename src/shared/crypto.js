@@ -1,9 +1,20 @@
 // ============ AES-256-GCM 加密 ============
 
+async function getPwdKeyHex(env) {
+  if (env.PWD_KEY) return env.PWD_KEY;
+  let hex = await env.KV.get('sys_pwd_key');
+  if (hex) return hex;
+  const bytes = crypto.getRandomValues(new Uint8Array(32));
+  hex = [...bytes].map(b => b.toString(16).padStart(2, '0')).join('');
+  await env.KV.put('sys_pwd_key', hex);
+  return hex;
+}
+
 async function getEncryptionKey(env) {
+  const hex = await getPwdKeyHex(env);
   const keyBytes = new Uint8Array(32);
   for (let i = 0; i < 32; i++) {
-    keyBytes[i] = parseInt(env.PWD_KEY.substr(i * 2, 2), 16);
+    keyBytes[i] = parseInt(hex.substr(i * 2, 2), 16);
   }
   return crypto.subtle.importKey('raw', keyBytes, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']);
 }

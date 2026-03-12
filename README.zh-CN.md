@@ -89,9 +89,8 @@
 1. 点击上方 **Deploy to Cloudflare** 按钮
 2. 授权 GitHub 和 Cloudflare 访问
 3. 按提示填入以下 Secrets：
-   - `TG_BOT_TOKEN` — 通过 [@BotFather](https://t.me/BotFather) 创建 Bot 获取
-   - `TG_CHAT_ID` — 给 Bot 发一条消息，然后访问 `https://api.telegram.org/bot<TOKEN>/getUpdates` 查看
-   - `PWD_KEY` — 运行 `openssl rand -hex 32` 生成
+   - `TG_BOT_TOKEN` — 通过 [@BotFather](https://t.me/BotFather) 创建 Bot（发送 `/newbot`）
+   - `TG_CHAT_ID` — 给 [@userinfobot](https://t.me/userinfobot) 发送 `/start` 获取你的 ID
 4. 等待部署完成
 5. 访问 `https://你的worker.workers.dev/init` 设置 Telegram Webhook
 6. 在 Cloudflare Dashboard → 你的域名 → Email → Email Routing 中添加 Catch-all 规则指向你的 Worker
@@ -107,7 +106,6 @@ npm install
 # 编辑 wrangler.jsonc：填入你的 KV namespace ID
 npx wrangler secret put TG_BOT_TOKEN
 npx wrangler secret put TG_CHAT_ID
-npx wrangler secret put PWD_KEY
 npx wrangler deploy
 # 访问 https://your-worker.workers.dev/init
 ```

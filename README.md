@@ -89,9 +89,8 @@ Incoming Email
 1. Click the **Deploy to Cloudflare** button above
 2. Authorize GitHub and Cloudflare access
 3. Fill in the required secrets when prompted:
-   - `TG_BOT_TOKEN` — from [@BotFather](https://t.me/BotFather)
-   - `TG_CHAT_ID` — send a message to your bot, then check `https://api.telegram.org/bot<TOKEN>/getUpdates`
-   - `PWD_KEY` — run `openssl rand -hex 32` to generate
+   - `TG_BOT_TOKEN` — from [@BotFather](https://t.me/BotFather) (send `/newbot`)
+   - `TG_CHAT_ID` — send `/start` to [@userinfobot](https://t.me/userinfobot) to get your ID
 4. Wait for deployment to complete
 5. Visit `https://your-worker.workers.dev/init` to set up the Telegram webhook
 6. Configure **Email Routing** in Cloudflare Dashboard → your domain → Email → Email Routing → add a catch-all rule pointing to your Worker
@@ -107,7 +106,6 @@ npm install
 # Edit wrangler.jsonc: fill in your KV namespace ID
 npx wrangler secret put TG_BOT_TOKEN
 npx wrangler secret put TG_CHAT_ID
-npx wrangler secret put PWD_KEY
 npx wrangler deploy
 # Visit https://your-worker.workers.dev/init
 ```
