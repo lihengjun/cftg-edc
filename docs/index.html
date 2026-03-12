@@ -488,8 +488,8 @@ async function verifyChatId() {
   setStatus('chatid-status', i18n[lang]['token.verifying'], 'loading');
   try {
     const text = lang === 'zh'
-      ? '🎉 CFTG-EDC 连接测试成功！\n\n你的 Chat ID 已确认，接下来请返回部署页面完成部署。'
-      : '🎉 CFTG-EDC connection test successful!\n\nYour Chat ID is confirmed. Go back to the deploy page to continue.';
+      ? '✅ 连接测试成功！Bot 可以正常向你发送消息。'
+      : '✅ Connection test passed! Bot can send you messages.';
     const res = await fetch(`https://api.telegram.org/bot${verifiedToken}/sendMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
