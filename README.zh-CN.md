@@ -6,9 +6,7 @@
 
 > 零服务器、零成本、零维护。只需你和你的 Telegram Bot。
 
-<a href="https://deploy.workers.cloudflare.com/?url=https://github.com/lihengjun/cftg-edc" target="_blank"><img src="https://deploy.workers.cloudflare.com/button" alt="Deploy to Cloudflare"></a>
-
-> **提示：** 右键点击按钮选择「在新标签页中打开」，这样可以边部署边参考下方指南。
+<a href="https://lihengjun.github.io/cftg-edc/" target="_blank"><img src="https://deploy.workers.cloudflare.com/button" alt="Deploy to Cloudflare"></a>
 
 ## 这是什么？
 
@@ -88,14 +86,11 @@
 
 ### 方式一：一键部署（推荐）
 
-1. 点击上方 **Deploy to Cloudflare** 按钮
-2. 授权 GitHub 和 Cloudflare 访问
-3. 按提示填入以下 Secrets：
-   - `TG_BOT_TOKEN` — 通过 [@BotFather](https://t.me/BotFather) 创建 Bot（发送 `/newbot`）
-   - `TG_CHAT_ID` — 给 [@userinfobot](https://t.me/userinfobot) 发送 `/start` 获取你的 ID
-4. 等待部署完成
-5. 访问 `https://你的worker.workers.dev/init` 设置 Telegram Webhook
-6. 在 Cloudflare Dashboard → 你的域名 → Email → Email Routing 中添加 Catch-all 规则指向你的 Worker
+1. 点击上方 **Deploy to Cloudflare** 按钮 — 会打开交互式引导页
+2. 按引导创建 Telegram Bot 并验证 Chat ID
+3. 点击「部署到 Cloudflare」，按提示粘贴配置值
+4. 部署完成后，访问 `https://你的worker.workers.dev/init` 设置 Telegram Webhook
+5. 在 Cloudflare Dashboard → 你的域名 → Email → Email Routing 中添加 Catch-all 规则指向你的 Worker
 
 ### 方式二：手动部署
 
