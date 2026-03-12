@@ -40,7 +40,10 @@ import worker, {
 	setLang, getLang, t, zh, en,
 } from '../src';
 
-beforeEach(() => setLang('zh'));
+beforeEach(async () => {
+	setLang('zh');
+	await env.KV.put('sys_initialized', '1');
+});
 
 // ============ 工具函数测试 ============
 

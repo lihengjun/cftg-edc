@@ -117,6 +117,51 @@ export async function handleTelegramWebhook(request, env, ctx) {
   return new Response('OK');
 }
 
+// ============ 初始化（Webhook + 命令菜单） ============
+
+async function runInit(origin, env) {
+  await loadSystemConfig(env);
+  const results = {};
+  const secret = deriveWebhookSecret(env.TG_BOT_TOKEN);
+  const workerUrl = `${origin}/`;
+
+  const whRes = await fetch(`https://api.telegram.org/bot${env.TG_BOT_TOKEN}/setWebhook`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ url: workerUrl, secret_token: secret }),
+  });
+  results.webhook = await whRes.json();
+
+  const commands = [
+    { command: 'list', description: t('cmd.list') },
+    { command: 'search', description: t('cmd.search') },
+    { command: 'pwd', description: t('cmd.pwd') },
+    { command: 'config', description: t('cmd.config') },
+  ];
+  const delRes = await fetch(`https://api.telegram.org/bot${env.TG_BOT_TOKEN}/deleteMyCommands`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({}),
+  });
+  results.deleteDefaultCommands = await delRes.json();
+
+  const cmdRes = await fetch(`https://api.telegram.org/bot${env.TG_BOT_TOKEN}/setMyCommands`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      commands,
+      scope: { type: 'chat', chat_id: env.TG_CHAT_ID },
+    }),
+  });
+  results.commands = await cmdRes.json();
+
+  if (results.webhook.ok && results.commands.ok) {
+    await env.KV.put('sys_initialized', Date.now().toString());
+  }
+
+  return results;
+}
+
 // ============ Worker 入口 ============
 
 export default {
@@ -133,49 +178,20 @@ export default {
       return handleTelegramWebhook(request, env, ctx);
     }
 
-    // /init：设置 Webhook + Bot 命令菜单
+    // /init：手动触发设置 Webhook + Bot 命令菜单
     if (url.pathname === '/init') {
-      await loadSystemConfig(env);
-      const results = {};
-      const secret = deriveWebhookSecret(env.TG_BOT_TOKEN);
-      const workerUrl = `${url.origin}/`;
-
-      const whRes = await fetch(`https://api.telegram.org/bot${env.TG_BOT_TOKEN}/setWebhook`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: workerUrl, secret_token: secret }),
-      });
-      results.webhook = await whRes.json();
-
-      const commands = [
-        { command: 'list', description: t('cmd.list') },
-        { command: 'search', description: t('cmd.search') },
-        { command: 'pwd', description: t('cmd.pwd') },
-        { command: 'config', description: t('cmd.config') },
-      ];
-      // 清除默认 scope 的命令（别人看不到菜单）
-      const delRes = await fetch(`https://api.telegram.org/bot${env.TG_BOT_TOKEN}/deleteMyCommands`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
-      });
-      results.deleteDefaultCommands = await delRes.json();
-
-      // 仅对自己的 chat 设置命令菜单
-      const cmdRes = await fetch(`https://api.telegram.org/bot${env.TG_BOT_TOKEN}/setMyCommands`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          commands,
-          scope: { type: 'chat', chat_id: env.TG_CHAT_ID },
-        }),
-      });
-      results.commands = await cmdRes.json();
-
+      const results = await runInit(url.origin, env);
       return new Response(JSON.stringify(results, null, 2), {
         headers: { 'Content-Type': 'application/json' },
       });
     }
+
+    // 首次访问自动初始化
+    const initialized = await env.KV.get('sys_initialized');
+    if (!initialized) {
+      try { await runInit(url.origin, env); } catch {}
+    }
+
     return new Response('Email-to-Telegram worker is running.');
   },
 
