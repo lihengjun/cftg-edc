@@ -6,7 +6,7 @@
 
 > Zero server. Zero cost. Zero maintenance. Just you and your Telegram bot.
 
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/lihengjun/cftg-edc)
+<a href="https://deploy.workers.cloudflare.com/?url=https://github.com/lihengjun/cftg-edc" target="_blank"><img src="https://deploy.workers.cloudflare.com/button" alt="Deploy to Cloudflare"></a>
 
 ## What is this?
 
