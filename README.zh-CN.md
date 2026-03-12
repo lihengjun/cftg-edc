@@ -8,6 +8,8 @@
 
 <a href="https://deploy.workers.cloudflare.com/?url=https://github.com/lihengjun/cftg-edc" target="_blank"><img src="https://deploy.workers.cloudflare.com/button" alt="Deploy to Cloudflare"></a>
 
+> **提示：** 右键点击按钮选择「在新标签页中打开」，这样可以边部署边参考下方指南。
+
 ## 这是什么？
 
 一个 Cloudflare Worker，把你的 Telegram Bot 变成个人指挥中心：

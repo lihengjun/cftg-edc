@@ -8,6 +8,8 @@
 
 <a href="https://deploy.workers.cloudflare.com/?url=https://github.com/lihengjun/cftg-edc" target="_blank"><img src="https://deploy.workers.cloudflare.com/button" alt="Deploy to Cloudflare"></a>
 
+> **Tip:** Right-click the button and select "Open in new tab" so you can follow the guide below while deploying.
+
 ## What is this?
 
 A single Cloudflare Worker that turns your Telegram bot into a personal command center:
