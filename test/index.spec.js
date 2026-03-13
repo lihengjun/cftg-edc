@@ -38,6 +38,7 @@ import worker, {
 	buildMergedSenderList, buildMgmtText, buildMgmtKeyboard,
 	MGMT_PAGE_SIZE,
 	setLang, getLang, t, zh, en,
+	VERSION, SCHEMA_VERSION,
 } from '../src';
 
 beforeEach(async () => {
@@ -1032,12 +1033,15 @@ describe('configurable storage functions', () => {
 // ============ Worker Handler 测试 ============
 
 describe('cftg-edc', () => {
-	it('GET returns status message', async () => {
+	it('GET returns health check page with version', async () => {
 		const request = new Request('http://example.com');
 		const ctx = createExecutionContext();
 		const response = await worker.fetch(request, env, ctx);
 		await waitOnExecutionContext(ctx);
-		expect(await response.text()).toBe('Email-to-Telegram worker is running.');
+		const text = await response.text();
+		expect(text).toContain('CFTG-EDC v');
+		expect(text).toContain('KV');
+		expect(response.headers.get('Content-Type')).toBe('text/plain; charset=utf-8');
 	});
 
 	it('POST with invalid JSON returns 400', async () => {
@@ -2023,6 +2027,36 @@ describe('buildConfigText (main page summary)', () => {
 		const text = buildConfigText(env, null);
 		expect(text).toContain('100 条');
 		expect(text).not.toContain('不限');
+	});
+});
+
+describe('version constants', () => {
+	it('VERSION is a semver string', () => {
+		expect(VERSION).toMatch(/^\d+\.\d+\.\d+$/);
+	});
+	it('SCHEMA_VERSION is a positive integer', () => {
+		expect(SCHEMA_VERSION).toBeGreaterThan(0);
+		expect(Number.isInteger(SCHEMA_VERSION)).toBe(true);
+	});
+});
+
+describe('buildConfigText with version', () => {
+	it('shows version without latest info', () => {
+		const env = { _sysConfig: {} };
+		const text = buildConfigText(env, null, null);
+		expect(text).toContain(`v${VERSION}`);
+	});
+	it('shows up-to-date when latest equals current', () => {
+		const env = { _sysConfig: {} };
+		const text = buildConfigText(env, null, VERSION);
+		expect(text).toContain('✓');
+		expect(text).toContain(`v${VERSION}`);
+	});
+	it('shows new version available', () => {
+		const env = { _sysConfig: {} };
+		const text = buildConfigText(env, null, '99.0.0');
+		expect(text).toContain('v99.0.0');
+		expect(text).toContain(`v${VERSION}`);
 	});
 });
 

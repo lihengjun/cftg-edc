@@ -14,6 +14,7 @@ import {
 } from '../shared/crypto.js';
 import { formatSize } from '../shared/utils.js';
 import { t, getLang, setLang } from '../i18n.js';
+import { VERSION } from '../version.js';
 
 // ============ 配置项分类 ============
 
@@ -21,7 +22,7 @@ const MAIL_CONFIG_KEYS = CONFIG_ITEMS.filter(c => c.key !== 'maxPasswords').map(
 
 // ============ 主页 UI ============
 
-export function buildConfigText(env, storageInfo) {
+export function buildConfigText(env, storageInfo, latestVersion) {
   let text = t('cfg.title') + '\n';
   if (storageInfo) {
     text += '\n' + t('cfg.mail', { used: formatSize(storageInfo.used), total: formatSize(storageInfo.total) });
@@ -29,6 +30,15 @@ export function buildConfigText(env, storageInfo) {
   }
   const pwdVal = getEffectiveValue(env, 'maxPasswords');
   text += '\n' + t('cfg.pwdLimit', { v: pwdVal === 0 ? t('cfg.unlimited') : t('cfg.count', { n: pwdVal }) });
+
+  // 版本信息
+  if (latestVersion && latestVersion !== VERSION && latestVersion > VERSION) {
+    text += '\n' + t('cfg.versionNew', { version: VERSION, latest: latestVersion });
+  } else if (latestVersion) {
+    text += '\n' + t('cfg.versionUpToDate', { version: VERSION });
+  } else {
+    text += '\n' + t('cfg.version', { version: VERSION });
+  }
   return text;
 }
 
@@ -112,11 +122,14 @@ async function getStorageInfo(env) {
 
 export async function editToConfig(env, msgId) {
   await loadSystemConfig(env);
-  const storageInfo = await getStorageInfo(env);
+  const [storageInfo, latestVersion] = await Promise.all([
+    getStorageInfo(env),
+    env.KV.get('sys_latest_version').catch(() => null),
+  ]);
   const payload = {
     chat_id: env.TG_CHAT_ID,
     message_id: msgId,
-    text: buildConfigText(env, storageInfo),
+    text: buildConfigText(env, storageInfo, latestVersion),
     parse_mode: 'HTML',
     reply_markup: buildConfigKeyboard(),
   };
@@ -142,8 +155,11 @@ async function editToPwdConfig(env, msgId) {
 
 export async function cmdConfig(env) {
   await loadSystemConfig(env);
-  const storageInfo = await getStorageInfo(env);
-  return sendTelegramMessage(env, buildConfigText(env, storageInfo), null, {
+  const [storageInfo, latestVersion] = await Promise.all([
+    getStorageInfo(env),
+    env.KV.get('sys_latest_version').catch(() => null),
+  ]);
+  return sendTelegramMessage(env, buildConfigText(env, storageInfo, latestVersion), null, {
     reply_markup: buildConfigKeyboard(),
   });
 }

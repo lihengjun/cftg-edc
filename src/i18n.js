@@ -405,6 +405,21 @@ const zh = {
   'storage.restoreSuffix': '_恢复',
   'storage.backupNotExist': '备份不存在或已过期',
 
+  // ---- 版本与健康检查 ----
+  'health.title': 'CFTG-EDC v{version}',
+  'health.status': '状态：✓ 运行中',
+  'health.bot': 'Bot：✓ 已连接 (@{username})',
+  'health.botFail': 'Bot：✗ 连接失败',
+  'health.webhook': 'Webhook：✓ 已注册',
+  'health.webhookNot': 'Webhook：✗ 未注册',
+  'health.webhookFail': 'Webhook：✗ 检查失败',
+  'health.kv': 'KV：✓ 已连接',
+  'health.kvFail': 'KV：✗ 连接失败',
+  'health.secretMissing': '⚠ 未设置 {name}，请在 CF Dashboard 添加此 Secret',
+  'cfg.version': '📦 版本：v{version}',
+  'cfg.versionUpToDate': '📦 版本：v{version} ✓',
+  'cfg.versionNew': '📦 版本：v{version} → v{latest} 可用',
+
   // ---- 通用错误 ----
   'error.exec': '❌ 执行出错: {err}',
 };
@@ -792,6 +807,21 @@ const en = {
   'storage.nameConflict': 'Name conflict. Please rename manually and retry',
   'storage.restoreSuffix': '_restored',
   'storage.backupNotExist': 'Backup not found or expired',
+
+  // ---- Version & health check ----
+  'health.title': 'CFTG-EDC v{version}',
+  'health.status': 'Status: ✓ Running',
+  'health.bot': 'Bot: ✓ Connected (@{username})',
+  'health.botFail': 'Bot: ✗ Connection failed',
+  'health.webhook': 'Webhook: ✓ Registered',
+  'health.webhookNot': 'Webhook: ✗ Not registered',
+  'health.webhookFail': 'Webhook: ✗ Check failed',
+  'health.kv': 'KV: ✓ Connected',
+  'health.kvFail': 'KV: ✗ Connection failed',
+  'health.secretMissing': '⚠ {name} not set — add this Secret in CF Dashboard',
+  'cfg.version': '📦 Version: v{version}',
+  'cfg.versionUpToDate': '📦 Version: v{version} ✓',
+  'cfg.versionNew': '📦 Version: v{version} → v{latest} available',
 
   // ---- Common error ----
   'error.exec': '❌ Error: {err}',

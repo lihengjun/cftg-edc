@@ -5,6 +5,7 @@ import { loadSystemConfig, runPasswordBackup } from './shared/storage.js';
 import { cmdList, cmdSearch, handleEmailCallback, handleEmailReply, handleIncomingEmail } from './email/email.js';
 import { cmdPwdList, cmdPwdSave, handlePwdCallback, handlePwdReply } from './password/password.js';
 import { cmdConfig, handleConfigCallback, handleConfigReply, handleImportFile } from './config/config.js';
+import { VERSION, SCHEMA_VERSION } from './version.js';
 
 // ============ 回调 action 前缀集合 ============
 
@@ -157,9 +158,81 @@ async function runInit(origin, env) {
 
   if (results.webhook.ok && results.commands.ok) {
     await env.KV.put('sys_initialized', Date.now().toString());
+    await env.KV.put('sys_schema_version', String(SCHEMA_VERSION));
   }
 
   return results;
+}
+
+// ============ 健康检查 ============
+
+async function buildHealthPage(env) {
+  await loadSystemConfig(env);
+  const lines = [t('health.title', { version: VERSION })];
+
+  // 检查 secrets
+  const missingSecrets = [];
+  if (!env.TG_BOT_TOKEN) missingSecrets.push('TG_BOT_TOKEN');
+  if (!env.TG_CHAT_ID) missingSecrets.push('TG_CHAT_ID');
+
+  if (missingSecrets.length > 0) {
+    for (const name of missingSecrets) {
+      lines.push(t('health.secretMissing', { name }));
+    }
+    return new Response(lines.join('\n'), { headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
+  }
+
+  lines.push(t('health.status'));
+
+  // Bot 连接 + Webhook 状态（并行请求，3 秒超时）
+  const [botResult, webhookResult] = await Promise.allSettled([
+    fetch(`https://api.telegram.org/bot${env.TG_BOT_TOKEN}/getMe`, { signal: AbortSignal.timeout(3000) })
+      .then(r => r.json()),
+    fetch(`https://api.telegram.org/bot${env.TG_BOT_TOKEN}/getWebhookInfo`, { signal: AbortSignal.timeout(3000) })
+      .then(r => r.json()),
+  ]);
+
+  if (botResult.status === 'fulfilled' && botResult.value.ok) {
+    lines.push(t('health.bot', { username: botResult.value.result.username }));
+  } else {
+    lines.push(t('health.botFail'));
+  }
+
+  if (webhookResult.status === 'fulfilled' && webhookResult.value.ok && webhookResult.value.result.url) {
+    lines.push(t('health.webhook'));
+  } else if (webhookResult.status === 'fulfilled') {
+    lines.push(t('health.webhookNot'));
+  } else {
+    lines.push(t('health.webhookFail'));
+  }
+
+  // KV 连接
+  try {
+    await env.KV.get('sys_initialized');
+    lines.push(t('health.kv'));
+  } catch {
+    lines.push(t('health.kvFail'));
+  }
+
+  return new Response(lines.join('\n'), { headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
+}
+
+// ============ 版本检查 ============
+
+async function checkLatestVersion(env) {
+  try {
+    const res = await fetch('https://api.github.com/repos/lihengjun/cftg-edc/releases/latest', {
+      headers: { 'User-Agent': 'cftg-edc', 'Accept': 'application/vnd.github.v3+json' },
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    const tag = (data.tag_name || '').replace(/^v/, '');
+    if (tag) {
+      await env.KV.put('sys_latest_version', tag);
+    }
+  } catch {
+    // 静默失败，不影响任何功能
+  }
 }
 
 // ============ Worker 入口 ============
@@ -192,7 +265,7 @@ export default {
       try { await runInit(url.origin, env); } catch {}
     }
 
-    return new Response('Email-to-Telegram worker is running.');
+    return buildHealthPage(env);
   },
 
   async email(message, env, ctx) {
@@ -202,10 +275,20 @@ export default {
 
   async scheduled(event, env, ctx) {
     await loadSystemConfig(env);
+
+    // 确保 schema 版本号存在
+    const schemaVer = await env.KV.get('sys_schema_version');
+    if (!schemaVer) {
+      await env.KV.put('sys_schema_version', String(SCHEMA_VERSION));
+    }
+
     const result = await runPasswordBackup(env);
     if (result.ok) {
       console.log(`Password backup: ${result.count} entries backed up (${result.date})`);
     }
+
+    // 检查最新版本（静默，不影响其他功能）
+    ctx.waitUntil(checkLatestVersion(env));
   },
 };
 
@@ -220,3 +303,4 @@ export * from './email/email.js';
 export * from './config/config.js';
 export * from './password/password.js';
 export * from './i18n.js';
+export * from './version.js';

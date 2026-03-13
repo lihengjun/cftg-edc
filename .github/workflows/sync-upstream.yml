@@ -1,0 +1,33 @@
+name: Sync Upstream
+
+on:
+  workflow_dispatch:
+  # Uncomment below to auto-sync weekly (every Monday at 00:00 UTC)
+  # schedule:
+  #   - cron: '0 0 * * 1'
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Add upstream remote
+        run: |
+          git remote add upstream https://github.com/lihengjun/cftg-edc.git || true
+          git fetch upstream main
+
+      - name: Merge upstream
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git merge upstream/main --no-edit
+
+      - name: Push changes
+        run: git push origin main
